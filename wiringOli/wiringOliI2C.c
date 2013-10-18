@@ -1,7 +1,4 @@
 #include <stdint.h>
-#include "i2cdev.h"
-#include "gpio_lib.h"
-#include "gpio-pin.h"
 #include <unistd.h>
 #include <linux/i2c-dev.h>
 #include <fcntl.h>
@@ -22,11 +19,11 @@
 int16_t g_i2c_fh;
 uint8_t  g_i2c_addr;
 
-int16_t i2c_init(uint8_t p_address)
+int16_t i2c_init(uint8_t p_address,uint8_t p_buss)
 {
 
   uint8_t l_filename[20];
-  uint16_t l_adapter_nr = BUSS;
+  uint16_t l_adapter_nr = p_buss;
 
   snprintf(l_filename, 19, "/dev/i2c-%d", l_adapter_nr);
   g_i2c_fh = open(l_filename, O_RDWR);
@@ -45,9 +42,6 @@ int16_t i2c_close()
 
 void i2c_reset()
 {
-  sunxi_gpio_output(PIO_RESET,0);
-  usleep(2000);
-  sunxi_gpio_output(PIO_RESET,1);
 }
 	
 

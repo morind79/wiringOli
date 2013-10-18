@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-int16_t  i2c_init(uint8_t  p_address);
+int16_t  i2c_init(uint8_t  p_address, uint8_t p_buss);
 int16_t  i2c_close();
 void i2c_reset();
 

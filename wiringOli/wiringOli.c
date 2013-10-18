@@ -6,13 +6,11 @@
  */
 
 #include <stdio.h>
-#include <iostream>
 #include <stdint.h>
 #include <time.h>
 #include <sys/time.h>
 
 #include "wiringOli.h"
-#include "gpio_lib.h"
 
 // Time for easy calculations
 

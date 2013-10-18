@@ -1,6 +1,12 @@
-#ifndef _GPIO_LIB_H_
-#define _GPIO_LIB_H_
+/*
+ * wiringOli.h
+ *
+ *  Created on: 14 oct. 2013
+ *      Author: denm
+ */
 
+#ifndef WIRINGOLI_H_
+#define WIRINGOLI_H_
 
 #define SW_PORTC_IO_BASE 0x01c20800
 
@@ -157,9 +163,20 @@ extern int sunxi_gpio_get_cfgpin(unsigned int pin);
 extern int sunxi_gpio_output(unsigned int pin, unsigned int val);
 extern void sunxi_gpio_cleanup(void);
 
+extern int wiringOliSetup(void);
+extern void pinMode(int pin, int mode);
+extern int digitalRead(int pin);
+extern void digitalWrite(int pin, int value);
+
+// Extras from arduino land
+extern void delay(unsigned int howLong);
+extern void delayMicroseconds(unsigned int howLong);
+extern unsigned int millis(void);
+extern unsigned int micros(void);
+
 #ifdef __cplusplus
 }
 #endif
 
 extern unsigned int SUNXI_PIO_BASE;
-#endif
+#endif /* WIRINGOLI_H_ */

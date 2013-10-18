@@ -38,7 +38,7 @@
 #include <unistd.h>
 #include <sched.h>
 
-#include "gpio_lib.h"
+#include "wiringOli.h"
 
 
 unsigned int SUNXI_PIO_BASE = 0;

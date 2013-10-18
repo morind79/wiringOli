@@ -29,15 +29,17 @@ int main()
 {
   // Setup GPIO
   wiringOliSetup();
-  // Set LED pin (PH2) as output
-  pinMode(SUNXI_GPH(2), OUTPUT);
+  // Set pin LED (PH2=40)
+  int pinLED = 40;
+  // Set pin LED as output
+  pinMode(pinLED, OUTPUT);
   // Loop
   for (;;)
   {
-    digitalWrite(SUNXI_GPH(2), HIGH);
-    delay(250);
-    digitalWrite(SUNXI_GPH(2), LOW);
-    delay(250);
+    digitalWrite(pinLED, HIGH);
+    delay(200);
+    digitalWrite(pinLED, LOW);
+    delay(200);
   }
   return(0);
 }

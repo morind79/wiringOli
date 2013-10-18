@@ -42,7 +42,7 @@ LIBS    =
 # Should not alter anything below this line
 ###############################################################################
 
-SRC        =        wiringOli.c gpio_lib.c
+SRC        =        wiringOli.c gpio_lib.c oliHiPri.c
 
 SRC_I2C        =        wiringOliI2C.c
 
@@ -114,4 +114,5 @@ depend:
 # DO NOT DELETE
 
 wiringOli.o: wiringOli.h
+oliHiPri.o: wiringOli.h
 wiringOliI2C.o: wiringOli.h wiringOliI2C.h

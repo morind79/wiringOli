@@ -87,6 +87,7 @@ install:        $(DYNAMIC)
 	@install -m 0755 -d                        $(DESTDIR)$(PREFIX)/lib
 	@install -m 0755 -d                        $(DESTDIR)$(PREFIX)/include
 	@install -m 0644 wiringOli.h                $(DESTDIR)$(PREFIX)/include
+	@install -m 0644 wiringOliI2C.h                $(DESTDIR)$(PREFIX)/include
 	@install -m 0755 libwiringOli.so.$(VERSION)                  $(DESTDIR)$(PREFIX)/lib
 	@ln -sf $(DESTDIR)$(PREFIX)/lib/libwiringOli.so.$(VERSION) $(DESTDIR)/lib/libwiringOli.so
 	@ln -sf $(DESTDIR)$(PREFIX)/lib/libwiringOli.so.$(VERSION) $(DESTDIR)/lib/libwiringOli.so.1
@@ -101,6 +102,7 @@ install-static:        $(STATIC)
 uninstall:
 	@echo "[UnInstall]"
 	@rm -f $(DESTDIR)$(PREFIX)/include/wiringOli.h
+	@rm -f $(DESTDIR)$(PREFIX)/include/wiringOliI2C.h
 	@rm -f $(DESTDIR)$(PREFIX)/lib/libwiringOli.*
 	@ldconfig
 

@@ -16,10 +16,11 @@
 #ifndef PIO_RESET 
 #define PIO_RESET PIN_PE0
 #endif
+
 int16_t g_i2c_fh;
 uint8_t  g_i2c_addr;
 
-int16_t i2c_init(uint8_t p_address,uint8_t p_buss)
+int16_t i2c_init(uint8_t p_address, uint8_t p_buss)
 {
 
   uint8_t l_filename[20];

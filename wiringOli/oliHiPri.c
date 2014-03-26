@@ -36,15 +36,15 @@
  *********************************************************************************
  */
 
-int oliHiPri (int pri)
+int oliHiPri(int pri)
 {
   struct sched_param sched ;
 
-  memset (&sched, 0, sizeof(sched)) ;
+  memset(&sched, 0, sizeof(sched)) ;
 
-  if (pri > sched_get_priority_max (SCHED_RR))
-    pri = sched_get_priority_max (SCHED_RR) ;
+  if (pri > sched_get_priority_max(SCHED_RR))
+    pri = sched_get_priority_max(SCHED_RR) ;
 
   sched.sched_priority = pri ;
-  return sched_setscheduler (0, SCHED_RR, &sched) ;
+  return sched_setscheduler(0, SCHED_RR, &sched) ;
 }

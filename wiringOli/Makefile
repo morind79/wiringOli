@@ -42,7 +42,7 @@ LIBS    =
 # Should not alter anything below this line
 ###############################################################################
 
-SRC        =        wiringOli.c gpio_lib.c oliHiPri.c
+SRC        =        wiringOli.c gpio_lib.c oliHiPri.c oliExt.c
 
 SRC_I2C        =        wiringOliI2C.c
 
@@ -87,6 +87,7 @@ install:        $(DYNAMIC)
 	@install -m 0755 -d                        $(DESTDIR)$(PREFIX)/lib
 	@install -m 0755 -d                        $(DESTDIR)$(PREFIX)/include
 	@install -m 0644 wiringOli.h                $(DESTDIR)$(PREFIX)/include
+	@install -m 0644 oliExt.h                $(DESTDIR)$(PREFIX)/include
 	@install -m 0644 wiringOliI2C.h                $(DESTDIR)$(PREFIX)/include
 	@install -m 0755 libwiringOli.so.$(VERSION)                  $(DESTDIR)$(PREFIX)/lib
 	@ln -sf $(DESTDIR)$(PREFIX)/lib/libwiringOli.so.$(VERSION) $(DESTDIR)/lib/libwiringOli.so
@@ -102,6 +103,7 @@ install-static:        $(STATIC)
 uninstall:
 	@echo "[UnInstall]"
 	@rm -f $(DESTDIR)$(PREFIX)/include/wiringOli.h
+	@rm -f $(DESTDIR)$(PREFIX)/include/oliExt.h
 	@rm -f $(DESTDIR)$(PREFIX)/include/wiringOliI2C.h
 	@rm -f $(DESTDIR)$(PREFIX)/lib/libwiringOli.*
 	@ldconfig
@@ -114,5 +116,6 @@ depend:
 # DO NOT DELETE
 
 wiringOli.o: wiringOli.h
+oliExt.o: oliExt.h
 oliHiPri.o: wiringOli.h
 wiringOliI2C.o: wiringOli.h wiringOliI2C.h

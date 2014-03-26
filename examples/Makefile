@@ -35,7 +35,7 @@ LDLIBS    = -lwiringOli -lpthread -lm
 # Should not alter anything below this line
 ###############################################################################
 
-SRC        =        testLED.c
+SRC        =        testLED.c testOliExt.c
 
 OBJ        =        $(SRC:.c=.o)
 
@@ -52,6 +52,9 @@ testLED:        testLED.o
 	@echo [link]
 	@$(CC) -o $@ testLED.o $(LDFLAGS) $(LDLIBS)
 
+testOliext:        testOliExt.o
+	@echo [link]
+	@$(CC) -o $@ testOliExt.o $(LDFLAGS) $(LDLIBS)
 
 .c.o:
 	@echo [CC] $<

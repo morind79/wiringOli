@@ -5,3 +5,4 @@ Upgrade of OliExt V1
 3 - Change PCB board shape
 4 - Used SMD phone jacks
 5 - Add VGA connector
+6 - Fix on the CAN part

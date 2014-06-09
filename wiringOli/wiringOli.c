@@ -7,10 +7,12 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <poll.h>
 #include <time.h>
 #include <sys/time.h>
 
 #include "wiringOli.h"
+#include "interrupt.h"
 
 // Pin definition
 static int pinToGpio[128] =
@@ -42,11 +44,11 @@ static int pinToGpio[128] =
 // Padding:
 
   -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,                            // ... 111
-  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,                            // ... 127
-} ;
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,                                                    // ... 127
+};
 
 // Time for easy calculations
-static uint64_t epochMilli, epochMicro ;
+static uint64_t epochMilli, epochMicro;
 
 /*
  * pinWiringOli:
@@ -99,6 +101,37 @@ int  digitalRead(int pin)
 void digitalWrite(int pin, int value)
 {
   sunxi_gpio_output(pinWiringOli(pin), value);
+}
+
+/*
+ * waitForInterrupt:
+ *	Wait for interrupt on a GPIO pin
+ *********************************************************************************
+ */
+int waitForInterrupt(int pin, int mS)
+{
+  struct pollfd polls;
+  int gpio_fd, rc;
+  uint8_t c ;
+
+  // Get pin A20 number
+  pin = pinWiringOli(pin);
+
+  gpio_export(pin);
+  gpio_set_dir(pin, 0);
+  // Set interrupt edge, can be "none", "rising", "falling", or "both"
+  gpio_set_edge(pin, "rising");
+  gpio_fd = gpio_fd_open(pin);
+
+	polls.fd = gpio_fd;
+	polls.events = POLLPRI;
+
+	rc = poll(&polls, 1, mS);      
+
+	(void)read(polls.fd, &c, 1);
+
+	gpio_fd_close(gpio_fd);
+	return rc;
 }
 
 /*

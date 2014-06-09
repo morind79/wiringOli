@@ -1,12 +1,10 @@
 /*
- * oliHiPri:
- *	Simple way to get your program running at high priority
- *	with realtime schedulling.
- *
- *	Copyright (c) 2012 Gordon Henderson
+ * softPwm.h:
+ *	Provide 2 channels of software driven PWM.
+ *	Copyright (c) 2014
  ***********************************************************************
  * This file is part of wiringOli:
- *	http://
+ *	https://
  *
  *    wiringOli is free software: you can redistribute it and/or modify
  *    it under the terms of the GNU Lesser General Public License as
@@ -24,27 +22,13 @@
  ***********************************************************************
  */
 
-#include <sched.h>
-#include <string.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-#include "wiringOli.h"
+extern int softPwmCreate(int pin, int value, int range);
+extern void softPwmWrite(int pin, int value);
 
-
-/*
- * oliHiPri:
- *	Attempt to set a high priority schedulling for the running program
- *********************************************************************************
- */
-
-int oliHiPri (int pri)
-{
-  struct sched_param sched ;
-
-  memset (&sched, 0, sizeof(sched)) ;
-
-  if (pri > sched_get_priority_max (SCHED_RR))
-    pri = sched_get_priority_max (SCHED_RR) ;
-
-  sched.sched_priority = pri ;
-  return sched_setscheduler (0, SCHED_RR, &sched) ;
+#ifdef __cplusplus
 }
+#endif

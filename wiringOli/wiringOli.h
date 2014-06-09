@@ -33,6 +33,8 @@
 #define OUTPUT  1
 #define PER     2
 
+// Threads
+#define	OLI_THREAD(X)	void *X (void *dummy)
 
 struct sunxi_gpio {
     unsigned int cfg[4];
@@ -170,6 +172,9 @@ extern void pinMode(int pin, int mode);
 extern void pullUpDnControlGpio(int pin, int pud);
 extern int digitalRead(int pin);
 extern void digitalWrite(int pin, int value);
+
+// Interrupt
+extern int waitForInterrupt(int pin, int mS);
 
 // Extras from arduino land
 extern void delay(unsigned int howLong);

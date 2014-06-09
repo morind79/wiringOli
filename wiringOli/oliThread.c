@@ -1,12 +1,11 @@
 /*
- * oliHiPri:
- *	Simple way to get your program running at high priority
- *	with realtime schedulling.
+ * oliThread.c:
+ *	Provide a simplified interface to pthreads
  *
- *	Copyright (c) 2012 Gordon Henderson
+ *	Copyright (c) 2014
  ***********************************************************************
  * This file is part of wiringOli:
- *	http://
+ *	https://
  *
  *    wiringOli is free software: you can redistribute it and/or modify
  *    it under the terms of the GNU Lesser General Public License as
@@ -24,27 +23,37 @@
  ***********************************************************************
  */
 
-#include <sched.h>
-#include <string.h>
-
+#include <pthread.h>
 #include "wiringOli.h"
 
+static pthread_mutex_t oliMutexes[4];
 
 /*
- * oliHiPri:
- *	Attempt to set a high priority schedulling for the running program
+ * oliThreadCreate:
+ *	Create and start a thread
  *********************************************************************************
  */
-
-int oliHiPri (int pri)
+int oliThreadCreate(void *(*fn)(void *))
 {
-  struct sched_param sched ;
+  pthread_t myThread;
 
-  memset (&sched, 0, sizeof(sched)) ;
-
-  if (pri > sched_get_priority_max (SCHED_RR))
-    pri = sched_get_priority_max (SCHED_RR) ;
-
-  sched.sched_priority = pri ;
-  return sched_setscheduler (0, SCHED_RR, &sched) ;
+  return pthread_create(&myThread, NULL, fn, NULL);
 }
+
+/*
+ * oliLock: oliUnlock:
+ *	Activate/Deactivate a mutex.
+ *	We're keeping things simple here and only tracking 4 mutexes which
+ *	is more than enough for out entry-level pthread programming
+ *********************************************************************************
+ */
+void oliLock(int key)
+{
+  pthread_mutex_lock(&oliMutexes[key]);
+}
+
+void oliUnlock(int key)
+{
+  pthread_mutex_unlock(&oliMutexes[key]);
+}
+

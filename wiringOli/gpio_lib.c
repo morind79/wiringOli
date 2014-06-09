@@ -158,7 +158,7 @@ int sunxi_gpio_input(unsigned int pin)
 /*
  * sunxi_gpio_set_pull:
  *	Set the internal pull resistor
- *	val=0 -> pull disable, 1 -> pull-up, 2 -> pull-down
+ *	val=0 -> pull disable 1 -> pull-up 2 -> pull-down
  *********************************************************************************
  */
 int sunxi_gpio_set_pull(unsigned int pin, unsigned int val)
@@ -169,9 +169,9 @@ int sunxi_gpio_set_pull(unsigned int pin, unsigned int val)
 	unsigned int offset = GPIO_PULL_OFFSET(pin);
 
 	if(SUNXI_PIO_BASE == 0)
-  {
-    return -1;
-  }
+    {
+        return -1;
+    }
 	struct sunxi_gpio *pio = &((struct sunxi_gpio_reg *)SUNXI_PIO_BASE)->gpio_bank[bank];
 
 	// pull = readl(&pio->pull[0] + index);

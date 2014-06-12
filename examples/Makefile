@@ -35,7 +35,7 @@ LDLIBS    = -lwiringOli -lpthread -lm
 # Should not alter anything below this line
 ###############################################################################
 
-SRC        =        testLED.c testOliExt.c
+SRC        =        testPortA.c testPortB.c testPortC.c testPortD.c testDisplay.c
 
 OBJ        =        $(SRC:.c=.o)
 
@@ -48,13 +48,25 @@ all:
 
 really-all:        $(BINS)
 
-testLED:        testLED.o
+testPortA:        testPortA.o
 	@echo [link]
-	@$(CC) -o $@ testLED.o $(LDFLAGS) $(LDLIBS)
+	@$(CC) -o $@ testPortA.o $(LDFLAGS) $(LDLIBS)
 
-testOliext:        testOliExt.o
+testPortB:        testPortB.o
 	@echo [link]
-	@$(CC) -o $@ testOliExt.o $(LDFLAGS) $(LDLIBS)
+	@$(CC) -o $@ testPortB.o $(LDFLAGS) $(LDLIBS)
+
+testPortC:        testPortC.o
+	@echo [link]
+	@$(CC) -o $@ testPortC.o $(LDFLAGS) $(LDLIBS)
+
+testPortD:        testPortD.o
+	@echo [link]
+	@$(CC) -o $@ testPortD.o $(LDFLAGS) $(LDLIBS)
+
+testDisplay:        testDisplay.o
+	@echo [link]
+	@$(CC) -o $@ testDisplay.o $(LDFLAGS) $(LDLIBS)
 
 .c.o:
 	@echo [CC] $<

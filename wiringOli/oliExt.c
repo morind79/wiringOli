@@ -20,6 +20,7 @@ static int pinPortC[8] = {77, 78, 79, 80, 27, 28, 29, 30};  // PH24 to PH27 and 
 static int pinPortD[8] = {31, 32, 33, 34, 35, 36, 37, 38};  // PE4 to PE11
 static int pinPortGeneral[2] = {18, 19}; // PI14 and PI15
 static int pinSIM900[4] = {21, 17, 20, 16}; // PC7, PI11, PC3, PI10
+static int pinDisplay[8] = {0, 1, 2, 3, 4, 5, 6, 7}; // PG0 to PG7
 
 /*
  * pinOliPortA :
@@ -59,6 +60,16 @@ int pinOliPortC(int pin)
 int pinOliPortD(int pin)
 {
   return pinPortD[pin];
+}
+
+/*
+ * pinOliDisplay :
+ *	Get board pin corresponding to Display pin numbering
+ *********************************************************************************
+ */
+int pinOliDisplay(int pin)
+{
+  return pinDisplay[pin];
 }
 
 /*
@@ -146,41 +157,41 @@ void pullUpDnCtrlPortD(int pin, int pud)
 }
 
 /*
- * digitalReadportA :
+ * digitalReadPortA :
  *	Read the value of a given PortA pin, returning HIGH or LOW
  *********************************************************************************
  */
-int  digitalReadPortA(int pin)
+int digitalReadPortA(int pin)
 {
   return(digitalRead(pinOliPortA(pin)));
 }
 
 /*
- * digitalReadportB :
+ * digitalReadPortB :
  *	Read the value of a given PortB pin, returning HIGH or LOW
  *********************************************************************************
  */
-int  digitalReadPortB(int pin)
+int digitalReadPortB(int pin)
 {
   return(digitalRead(pinOliPortB(pin)));
 }
 
 /*
- * digitalReadportC :
+ * digitalReadPortC :
  *	Read the value of a given PortC pin, returning HIGH or LOW
  *********************************************************************************
  */
-int  digitalReadPortC(int pin)
+int digitalReadPortC(int pin)
 {
   return(digitalRead(pinOliPortC(pin)));
 }
 
 /*
- * digitalReadportD :
+ * digitalReadPortD :
  *	Read the value of a given PortD pin, returning HIGH or LOW
  *********************************************************************************
  */
-int  digitalReadPortD(int pin)
+int digitalReadPortD(int pin)
 {
   return(digitalRead(pinOliPortD(pin)));
 }
@@ -223,4 +234,226 @@ void digitalWritePortC(int pin, int value)
 void digitalWritePortD(int pin, int value)
 {
   digitalWrite(pinOliPortD(pin), value);
+}
+
+/*
+ * digitalWriteDisplaySegment :
+ *	Set an output bit
+ *********************************************************************************
+ */
+void digitalWriteDisplaySegment(int pin, int value)
+{
+  digitalWrite(pinOliDisplay(pin), value);
+}
+
+/*
+ * digitalWriteDisplay :
+ *	Set an output bit
+ *********************************************************************************
+ */
+void digitalWriteDisplay(int pin, int value)
+{
+  if (value == 0)
+  {
+    digitalWrite(pinOliDisplay(0), HIGH);
+    digitalWrite(pinOliDisplay(1), HIGH);
+    digitalWrite(pinOliDisplay(2), HIGH);
+    digitalWrite(pinOliDisplay(3), HIGH);
+    digitalWrite(pinOliDisplay(4), HIGH);
+    digitalWrite(pinOliDisplay(5), HIGH);
+    digitalWrite(pinOliDisplay(6), LOW);
+    digitalWrite(pinOliDisplay(7), LOW);  
+  }
+  else if (value == 1)
+  {
+    digitalWrite(pinOliDisplay(0), LOW);
+    digitalWrite(pinOliDisplay(1), HIGH);
+    digitalWrite(pinOliDisplay(2), HIGH);
+    digitalWrite(pinOliDisplay(3), LOW);
+    digitalWrite(pinOliDisplay(4), LOW);
+    digitalWrite(pinOliDisplay(5), LOW);
+    digitalWrite(pinOliDisplay(6), LOW);
+    digitalWrite(pinOliDisplay(7), LOW);  
+  }
+  else if (value == 2)
+  {
+    digitalWrite(pinOliDisplay(0), HIGH);
+    digitalWrite(pinOliDisplay(1), HIGH);
+    digitalWrite(pinOliDisplay(2), LOW);
+    digitalWrite(pinOliDisplay(3), HIGH);
+    digitalWrite(pinOliDisplay(4), HIGH);
+    digitalWrite(pinOliDisplay(5), LOW);
+    digitalWrite(pinOliDisplay(6), HIGH);
+    digitalWrite(pinOliDisplay(7), LOW);  
+  }
+  else if (value == 3)
+  {
+    digitalWrite(pinOliDisplay(0), HIGH);
+    digitalWrite(pinOliDisplay(1), HIGH);
+    digitalWrite(pinOliDisplay(2), HIGH);
+    digitalWrite(pinOliDisplay(3), HIGH);
+    digitalWrite(pinOliDisplay(4), LOW);
+    digitalWrite(pinOliDisplay(5), LOW);
+    digitalWrite(pinOliDisplay(6), HIGH);
+    digitalWrite(pinOliDisplay(7), LOW);  
+  }
+  else if (value == 4)
+  {
+    digitalWrite(pinOliDisplay(0), LOW);
+    digitalWrite(pinOliDisplay(1), HIGH);
+    digitalWrite(pinOliDisplay(2), HIGH);
+    digitalWrite(pinOliDisplay(3), LOW);
+    digitalWrite(pinOliDisplay(4), LOW);
+    digitalWrite(pinOliDisplay(5), HIGH);
+    digitalWrite(pinOliDisplay(6), HIGH);
+    digitalWrite(pinOliDisplay(7), LOW);  
+  }
+  else if (value == 5)
+  {
+    digitalWrite(pinOliDisplay(0), HIGH);
+    digitalWrite(pinOliDisplay(1), LOW);
+    digitalWrite(pinOliDisplay(2), HIGH);
+    digitalWrite(pinOliDisplay(3), HIGH);
+    digitalWrite(pinOliDisplay(4), LOW);
+    digitalWrite(pinOliDisplay(5), HIGH);
+    digitalWrite(pinOliDisplay(6), HIGH);
+    digitalWrite(pinOliDisplay(7), LOW);  
+  }
+  else if (value == 6)
+  {
+    digitalWrite(pinOliDisplay(0), LOW);
+    digitalWrite(pinOliDisplay(1), LOW);
+    digitalWrite(pinOliDisplay(2), HIGH);
+    digitalWrite(pinOliDisplay(3), HIGH);
+    digitalWrite(pinOliDisplay(4), HIGH);
+    digitalWrite(pinOliDisplay(5), HIGH);
+    digitalWrite(pinOliDisplay(6), HIGH);
+    digitalWrite(pinOliDisplay(7), LOW);  
+  }
+  else if (value == 7)
+  {
+    digitalWrite(pinOliDisplay(0), HIGH);
+    digitalWrite(pinOliDisplay(1), HIGH);
+    digitalWrite(pinOliDisplay(2), HIGH);
+    digitalWrite(pinOliDisplay(3), LOW);
+    digitalWrite(pinOliDisplay(4), LOW);
+    digitalWrite(pinOliDisplay(5), LOW);
+    digitalWrite(pinOliDisplay(6), LOW);
+    digitalWrite(pinOliDisplay(7), LOW);  
+  }
+  else if (value == 8)
+  {
+    digitalWrite(pinOliDisplay(0), HIGH);
+    digitalWrite(pinOliDisplay(1), HIGH);
+    digitalWrite(pinOliDisplay(2), HIGH);
+    digitalWrite(pinOliDisplay(3), HIGH);
+    digitalWrite(pinOliDisplay(4), HIGH);
+    digitalWrite(pinOliDisplay(5), HIGH);
+    digitalWrite(pinOliDisplay(6), HIGH);
+    digitalWrite(pinOliDisplay(7), LOW);  
+  }
+  else if (value == 9)
+  {
+    digitalWrite(pinOliDisplay(0), HIGH);
+    digitalWrite(pinOliDisplay(1), HIGH);
+    digitalWrite(pinOliDisplay(2), HIGH);
+    digitalWrite(pinOliDisplay(3), LOW);
+    digitalWrite(pinOliDisplay(4), LOW);
+    digitalWrite(pinOliDisplay(5), HIGH);
+    digitalWrite(pinOliDisplay(6), HIGH);
+    digitalWrite(pinOliDisplay(7), LOW);  
+  }
+  else
+  {
+    digitalWrite(pinOliDisplay(0), LOW);
+    digitalWrite(pinOliDisplay(1), LOW);
+    digitalWrite(pinOliDisplay(2), LOW);
+    digitalWrite(pinOliDisplay(3), LOW);
+    digitalWrite(pinOliDisplay(4), LOW);
+    digitalWrite(pinOliDisplay(5), LOW);
+    digitalWrite(pinOliDisplay(6), LOW);
+    digitalWrite(pinOliDisplay(7), LOW);  
+  }
+}
+
+/*
+ * digitalWriteSIM900_ON :
+ *	Set ON/OFF of SIM900 module
+ *********************************************************************************
+ */
+void digitalWriteSIM900_ON(int value)
+{
+  digitalWrite(pinSIM900[0], value);
+}
+
+/*
+ * digitalReadSIM900_LED :
+ *	Read LED value of SIM900 module, returning HIGH or LOW
+ *********************************************************************************
+ */
+int digitalReadSIM900_LED(int pin)
+{
+  return(digitalRead(pinSIM900[1]));
+}
+
+/*
+ * digitalWriteSIM900_RST :
+ *	Set RST of SIM900 module
+ *********************************************************************************
+ */
+void digitalWriteSIM900_RST(int value)
+{
+  digitalWrite(pinSIM900[2], value);
+}
+
+/*
+ * digitalReadSIM900_RI :
+ *	Read RI value of SIM900 module, returning HIGH or LOW
+ *********************************************************************************
+ */
+int digitalReadSIM900_RI(int pin)
+{
+  return(digitalRead(pinSIM900[3]));
+}
+
+/*
+ * oliextSetup:
+ *	Must be called once at the start of your program execution.
+ *
+ * Default setup: All port (A, B, C, D, General) as input
+ *	              Display as output
+ *	              SIM900 PC7, PC3=output, PI11, PI10=input 
+ *********************************************************************************
+ */
+void oliExtSetup(void)
+{
+  int i = 0;
+  // Port A and B (16 bit) -> Input
+  for (i=0; i<16; i++)
+  {
+    pinMode(pinOliPortA(i), INPUT);
+    pinMode(pinOliPortB(i), INPUT);
+  }
+  // Port C and D (8 bit) -> Input
+  for (i=0; i<8; i++)
+  {
+    pinMode(pinOliPortC(i), INPUT);
+    pinMode(pinOliPortD(i), INPUT);
+  }
+  // Port General (2 bit) -> Input
+  for (i=0; i<2; i++)
+  {
+    pinMode(pinPortGeneral[i], INPUT);
+  }
+  // Display (8 bit) -> Output
+  for (i=0; i<8; i++)
+  {
+    pinMode(pinOliDisplay(i), OUTPUT);
+  }
+  // SIM900 (4 bit) -> Input and Output
+  pinMode(pinSIM900[0], OUTPUT);
+  pinMode(pinSIM900[1], INPUT);
+  pinMode(pinSIM900[2], OUTPUT);
+  pinMode(pinSIM900[3], INPUT);
+
 }

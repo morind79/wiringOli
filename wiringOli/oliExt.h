@@ -12,10 +12,12 @@
 extern "C" {
 #endif
 
+extern void oliExtSetup(void);
 extern int pinOliPortA(int pin);
 extern int pinOliPortB(int pin);
 extern int pinOliPortC(int pin);
 extern int pinOliPortD(int pin);
+extern int pinOliDisplay(int pin);
 extern void pinModePortA(int pin, int mode);
 extern void pinModePortB(int pin, int mode);
 extern void pinModePortC(int pin, int mode);
@@ -32,6 +34,12 @@ extern void digitalWritePortA(int pin, int value);
 extern void digitalWritePortB(int pin, int value);
 extern void digitalWritePortC(int pin, int value);
 extern void digitalWritePortD(int pin, int value);
+extern void digitalWriteDisplaySegment(int pin, int value);
+extern void digitalWriteDisplay(int pin, int value);
+extern void digitalWriteSIM900_ON(int value);
+extern int digitalReadSIM900_LED(int pin);
+extern void digitalWriteSIM900_RST(int value);
+extern int digitalReadSIM900_RI(int pin);
 
 #ifdef __cplusplus
 }

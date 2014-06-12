@@ -1,9 +1,9 @@
 /*
- * testOliExt.c :
- *        Standard "blink" program in wiringOli. Blinks the LED connected
- *        to the PH2 GPIO pin on Olinuxino A20.
+ * testPortB.c:
+ *        Standard "blink" program in wiringOli. Blink the LEDs connected
+ *        to port B of OliExt using GPIO pin on Olinuxino A20.
  *
- * Copyright (c) 2012-2013 
+ * Copyright (c) 2013-2014 
  ***********************************************************************
  * This file is part of wiringOli:
  *        http://
@@ -32,14 +32,14 @@ int main()
   wiringOliSetup();
   int i;
   // Loop
-  for (i=0; i<17; i++)
+  for (i=0; i<16; i++)
   {
     // Set pin LED as output
     pinModePortB(i, OUTPUT);
     digitalWritePortB(i, HIGH);
-    delay(200);
+    delay(100);
     digitalWritePortB(i, LOW);
-    delay(200);
+    delay(100);
   }
   return(0);
 }

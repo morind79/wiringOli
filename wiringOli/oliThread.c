@@ -26,13 +26,16 @@
 #include <pthread.h>
 #include "wiringOli.h"
 
-static pthread_mutex_t oliMutexes[4];
+static pthread_mutex_t oliMutexes [4] ;
+
+
 
 /*
  * oliThreadCreate:
  *	Create and start a thread
  *********************************************************************************
  */
+
 int oliThreadCreate(void *(*fn)(void *))
 {
   pthread_t myThread;
@@ -47,6 +50,7 @@ int oliThreadCreate(void *(*fn)(void *))
  *	is more than enough for out entry-level pthread programming
  *********************************************************************************
  */
+
 void oliLock(int key)
 {
   pthread_mutex_lock(&oliMutexes[key]);

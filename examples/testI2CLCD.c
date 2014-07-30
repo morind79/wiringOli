@@ -1,7 +1,7 @@
 /*
- * testPortA.c:
+ * testI2CLCD.c:
  *        Standard "blink" program in wiringOli. Blink the LEDs connected
- *        to port A of OliExt using GPIO pin on Olinuxino A20.
+ *        to port C of OliExt using GPIO pin on Olinuxino A20.
  *
  * Copyright (c) 2013-2014 
  ***********************************************************************
@@ -24,23 +24,15 @@
  */
  
 #include <wiringOli.h>
+#include <wiringOliI2C.h>
 #include <oliExt.h>
+#include <i2cLcd.h>
 
 int main()
 {
   // Setup GPIO
   wiringOliSetup();
-  oliExtSetup();
-  int i;
-  // Loop
-  for (i=0; i<16; i++)
-  {
-    // Set pin LED as output
-    pinModePortA(i, OUTPUT);
-    digitalWritePortA(i, HIGH);
-    delay(100);
-    digitalWritePortA(i, LOW);
-    delay(100);
-  }
+  LCDinit();
+
   return(0);
 }

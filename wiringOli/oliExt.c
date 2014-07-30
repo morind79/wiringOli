@@ -251,7 +251,7 @@ void digitalWriteDisplaySegment(int pin, int value)
  *	Set an output bit
  *********************************************************************************
  */
-void digitalWriteDisplay(int pin, int value)
+void digitalWriteDisplay(int value)
 {
   if (value == 0)
   {

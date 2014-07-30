@@ -8,12 +8,14 @@
 extern "C" {
 #endif
 
-int16_t  i2c_init(uint8_t  p_address, uint8_t p_buss);
-int16_t  i2c_close();
-void i2c_reset();
+extern int wiringOliI2CRead       (int fd) ;
+extern int wiringOliI2CReadReg8   (int fd, int reg) ;
+extern int wiringOliI2CReadReg16  (int fd, int reg) ;
+extern int wiringOliI2CWrite      (int fd, int data) ;
+extern int wiringOliI2CWriteReg8  (int fd, int reg, int data) ;
+extern int wiringOliI2CWriteReg16 (int fd, int reg, int data) ;
 
-uint16_t i2c_read(uint8_t p_reg,void * buff,uint16_t length);
-uint16_t i2c_write(uint8_t p_reg,void *buff,uint16_t length); 
+extern int wiringOliI2CSetup             (int devId) ;
 
 #ifdef __cplusplus
 }

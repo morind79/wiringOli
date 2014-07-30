@@ -35,7 +35,7 @@ extern void digitalWritePortB(int pin, int value);
 extern void digitalWritePortC(int pin, int value);
 extern void digitalWritePortD(int pin, int value);
 extern void digitalWriteDisplaySegment(int pin, int value);
-extern void digitalWriteDisplay(int pin, int value);
+extern void digitalWriteDisplay(int value);
 extern void digitalWriteSIM900_ON(int value);
 extern int digitalReadSIM900_LED(int pin);
 extern void digitalWriteSIM900_RST(int value);

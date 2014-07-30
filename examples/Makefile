@@ -35,7 +35,7 @@ LDLIBS    = -lwiringOli -lpthread -lm
 # Should not alter anything below this line
 ###############################################################################
 
-SRC        =        testPortA.c testPortB.c testPortC.c testPortD.c testDisplay.c
+SRC        =        testPortA.c testPortB.c testPortC.c testPortD.c testDisplay.c testI2CLCD.c
 
 OBJ        =        $(SRC:.c=.o)
 
@@ -67,6 +67,9 @@ testPortD:        testPortD.o
 testDisplay:        testDisplay.o
 	@echo [link]
 	@$(CC) -o $@ testDisplay.o $(LDFLAGS) $(LDLIBS)
+testI2CLCD:        testI2CLCD.o
+	@echo [link]
+	@$(CC) -o $@ testI2CLCD.o $(LDFLAGS) $(LDLIBS)
 
 .c.o:
 	@echo [CC] $<

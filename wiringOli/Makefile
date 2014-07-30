@@ -43,7 +43,7 @@ LIBS    =
 ###############################################################################
 
 SRC        =        wiringOli.c gpio_lib.c oliHiPri.c oliExt.c interrupt.c wiringSerial.c	\
-		softPwm.c oliThread.c
+		softPwm.c oliThread.c i2cLcd.c
 
 SRC_I2C        =        wiringOliI2C.c
 
@@ -93,6 +93,7 @@ install:        $(DYNAMIC)
 	@install -m 0644 softPwm.h                $(DESTDIR)$(PREFIX)/include
 	@install -m 0644 wiringSerial.h                $(DESTDIR)$(PREFIX)/include
 	@install -m 0644 wiringOliI2C.h                $(DESTDIR)$(PREFIX)/include
+	@install -m 0644 i2cLcd.h                $(DESTDIR)$(PREFIX)/include
 	@install -m 0755 libwiringOli.so.$(VERSION)                  $(DESTDIR)$(PREFIX)/lib
 	@ln -sf $(DESTDIR)$(PREFIX)/lib/libwiringOli.so.$(VERSION) $(DESTDIR)/lib/libwiringOli.so
 	@ln -sf $(DESTDIR)$(PREFIX)/lib/libwiringOli.so.$(VERSION) $(DESTDIR)/lib/libwiringOli.so.1
@@ -112,6 +113,7 @@ uninstall:
 	@rm -f $(DESTDIR)$(PREFIX)/include/softPwm.h
 	@rm -f $(DESTDIR)$(PREFIX)/include/wiringSerial.h
 	@rm -f $(DESTDIR)$(PREFIX)/include/wiringOliI2C.h
+	@rm -f $(DESTDIR)$(PREFIX)/include/i2cLcd.h
 	@rm -f $(DESTDIR)$(PREFIX)/lib/libwiringOli.*
 	@ldconfig
 
@@ -128,4 +130,5 @@ interrupt.o: interrupt.h
 softPwm.o: softPwm.h
 wiringSerial.o: wiringSerial.h
 oliHiPri.o: wiringOli.h
+i2cLcd.o: i2cLcd.h
 wiringOliI2C.o: wiringOli.h wiringOliI2C.h

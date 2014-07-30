@@ -24,73 +24,20 @@
  */
  
 #include <wiringOli.h>
+#include <oliExt.h>
 
 int main()
 {
   // Setup GPIO
   wiringOliSetup();
-  int pinA = 0;
-  int pinB = 1;
-  int pinC = 2;
-  int pinD = 3;
-  int pinE = 4;
-  int pinF = 5;
-  int pinG = 6;
-  int pinDot = 7;
-
-  // Set pin LED as output
-  pinMode(pinA, OUTPUT);
-  pinMode(pinB, OUTPUT);
-  pinMode(pinC, OUTPUT);
-  pinMode(pinD, OUTPUT);
-  pinMode(pinE, OUTPUT);
-  pinMode(pinF, OUTPUT);
-  pinMode(pinG, OUTPUT);
-  pinMode(pinDot, OUTPUT);
-  // Set pull down
-  pullUpDnControlGpio(pinA, 2);
-  pullUpDnControlGpio(pinB, 2);
-  pullUpDnControlGpio(pinC, 2);
-  pullUpDnControlGpio(pinD, 2);
-  pullUpDnControlGpio(pinE, 2);
-  pullUpDnControlGpio(pinF, 2);
-  pullUpDnControlGpio(pinG, 2);
-  pullUpDnControlGpio(pinDot, 2);
+  oliExtSetup();
   // Loop
-  for (;;)
+  int i;
+  for (i=0; i<10; i++)
   {
-    digitalWrite(pinA, HIGH);
-    delay(100);
-    digitalWrite(pinB, HIGH);
-    delay(100);
-    digitalWrite(pinC, HIGH);
-    delay(100);
-    digitalWrite(pinD, HIGH);
-    delay(100);
-    digitalWrite(pinE, HIGH);
-    delay(100);
-    digitalWrite(pinF, HIGH);
-    delay(100);
-    digitalWrite(pinG, HIGH);
-    delay(100);
-    digitalWrite(pinDot, HIGH);
-    delay(100);
-    digitalWrite(pinA, LOW);
-    delay(100);
-    digitalWrite(pinB, LOW);
-    delay(100);
-    digitalWrite(pinC, LOW);
-    delay(100);
-    digitalWrite(pinD, LOW);
-    delay(100);
-    digitalWrite(pinE, LOW);
-    delay(100);
-    digitalWrite(pinF, LOW);
-    delay(100);
-    digitalWrite(pinG, LOW);
-    delay(100);
-    digitalWrite(pinDot, LOW);
-    delay(100);
+    digitalWriteDisplay(i);
+    printf("AB=%d\n", i);
+    delay(1000);
   }
   return(0);
 }

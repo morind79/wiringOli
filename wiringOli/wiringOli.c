@@ -246,7 +246,6 @@ int wiringOliSetup(void)
 
   initialiseEpoch() ;
   int result;
-
   result = sunxi_gpio_init();
   if(result == SETUP_DEVMEM_FAIL) {
 	printf("No access to /dev/mem. Try running as root !");

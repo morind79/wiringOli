@@ -39,10 +39,11 @@ static LCDConf LCDDev;
  */
 static void expandWrite(unsigned char value)
 {
-  wiringOliI2CWriteReg8(LCDDev.devAddr, 0x00, value | LCDDev.backLightEn);
-  //unsigned char buff[1];
-  //buff[0] = value | LCDDev.backLightEn;
-  //i2c_write(0x00, buff, 1);
+  wiringOliI2CWriteReg8(LCDDev.fd, 0x00, value | LCDDev.backLightEn);
+  //unsigned char buff[10];
+  //buff[0] = 0x00;		//Pointer to the first register
+  //buff[1] = value | LCDDev.backLightEn;
+  //I2C_Send(LCDDev.fd, buff, 2);
 }
 
 /*
@@ -102,177 +103,177 @@ static void writeData(unsigned char value)
 }
 
 /*
- * clear :
+ * LCDClear :
  *	Clear LCD
  *********************************************************************************
  */
-void clear(void)
+void LCDClear(void)
 {
     writeCmd(CLEARDISPLAY);
     delayMicroseconds(50000);
 }
 
 /*
- * home :
+ * LCDHome :
  *	Set cursor to home position on LCD
  *********************************************************************************
  */
-void home(void)
+void LCDHome(void)
 {
     writeCmd(RETURNHOME);
     delayMicroseconds(50000);
 }
 
 /*
- * setCursor :
+ * LCDSetCursor :
  *	Set cursor to specified position on LCD
  *********************************************************************************
  */
-void setCursor(unsigned char row, unsigned char col)
+void LCDSetCursor(unsigned char row, unsigned char col)
 {
     unsigned char rowOffset[] = {0x00, 0x40, 0x14, 0x54};
-    if (col<LCDDev.numCols && row<LCDDev.numRows)
+    if (col < LCDDev.numCols && row < LCDDev.numRows)
     {
         writeCmd(SETDDRAMADDR | (col + rowOffset[row]));
     }
 }
 
 /*
- * displayOff :
+ * LCDDisplayOff :
  *	Turn off diplay
  *********************************************************************************
  */
-void displayOff(void)
+void LCDDisplayOff(void)
 {
     LCDDev.displayControl &= ~DISPLAYON;
     writeCmd(DISPLAYCONTROL | LCDDev.displayControl);
 }
 
 /*
- * displayOn :
+ * LCDDisplayOn :
  *	Turn on diplay
  *********************************************************************************
  */
-void displayOn(void)
+void LCDDisplayOn(void)
 {
     LCDDev.displayControl |= DISPLAYON;
     writeCmd(DISPLAYCONTROL | LCDDev.displayControl);
 }
 
 /*
- * cursorOff :
+ * LCDCursorOff :
  *	Turn off cursor display
  *********************************************************************************
  */
-void cursorOff(void)
+void LCDCursorOff(void)
 {
     LCDDev.displayControl &= ~CURSORON;
     writeCmd(DISPLAYCONTROL | LCDDev.displayControl);
 }
 
 /*
- * cursorOn :
+ * LCDCursorOn :
  *	Turn on cursor display
  *********************************************************************************
  */
-void cursorOn(void)
+void LCDCursorOn(void)
 {
     LCDDev.displayControl |= CURSORON;
     writeCmd(DISPLAYCONTROL | LCDDev.displayControl);
 }
 
 /*
- * blinkOff :
+ * LCDBlinkOff :
  *	Turn off blink
  *********************************************************************************
  */
-void blinkOff(void)
+void LCDBlinkOff(void)
 {
     LCDDev.displayControl &= ~BLINKON;
     writeCmd(DISPLAYCONTROL | LCDDev.displayControl);
 }
 
 /*
- * blinkOn :
+ * LCDBlinkOn :
  *	Turn on blink
  *********************************************************************************
  */
-void blinkOn(void)
+void LCDBlinkOn(void)
 {
     LCDDev.displayControl |= BLINKON;
     writeCmd(DISPLAYCONTROL | LCDDev.displayControl);
 }
 
 /*
- * scroolDisplayLeft :
+ * LCDScroolDisplayLeft :
  *	Scroll display content to left by one character
  *********************************************************************************
  */
-void scrollDisplayLeft(void)
+void LCDScrollDisplayLeft(void)
 {
     writeCmd(DISPLAYMOVE | CURSORSHIFT | MOVELEFT);
 }
 
 /*
- * scroolDisplayRight :
+ * LCDScroolDisplayRight :
  *	Scroll display content to right by one character
  *********************************************************************************
  */
-void scrollDisplayRight(void)
+void LCDScrollDisplayRight(void)
 {
     writeCmd(DISPLAYMOVE | CURSORSHIFT | MOVERIGHT);
 }
 
 /*
- * autoScrollOff :
+ * LCDAutoScrollOff :
  *	Turn off auto scroll
  *********************************************************************************
  */
-void autoScrollOff(void)
+void LCDAutoScrollOff(void)
 {
     LCDDev.displayMode &= ~ENTRYSHIFTINC;
     writeCmd(ENTRYMODESET | LCDDev.displayMode);
 }
 
 /*
- * autoScrollOn :
+ * LCDAutoScrollOn :
  *	Turn on auto scroll
  *********************************************************************************
  */
-void autoScrollOn(void)
+void LCDAutoScrollOn(void)
 {
     LCDDev.displayMode |= ENTRYSHIFTINC;
     writeCmd(ENTRYMODESET | LCDDev.displayMode);
 }
 
 /*
- * backlightOff :
+ * LCDBacklightOff :
  *	Turn off back light
  *********************************************************************************
  */
-void backlightOff(void)
+void LCDBacklightOff(void)
 {
     LCDDev.backLightEn=BACKLIGHTOFF;
     expandWrite(0);
 }
 
 /*
- * backlightOn :
+ * LCDBacklightOn :
  *	Turn on back light
  *********************************************************************************
  */
-void backlightOn(void)
+void LCDBacklightOn(void)
 {
     LCDDev.backLightEn=BACKLIGHTON;
     expandWrite(0);
 }
 
 /*
- * createChar :
+ * LCDCreateChar :
  *	Create a user defined character
  *********************************************************************************
  */
-void createChar(unsigned char location, unsigned char charMap[])
+void LCDCreateChar(unsigned char location, unsigned char charMap[])
 {
     unsigned char i;
     location &= 0x07;
@@ -284,25 +285,25 @@ void createChar(unsigned char location, unsigned char charMap[])
 }
 
 /*
- * showChar :
+ * LCDShowChar :
  *	Show a character
  *********************************************************************************
  */
-void showChar(unsigned char row, unsigned char col, char ch)
+void LCDShowChar(unsigned char row, unsigned char col, char ch)
 {
     if (col < LCDDev.numCols && row < LCDDev.numRows)
     {
-        setCursor(row, col);
+        LCDSetCursor(row, col);
         writeData(ch);
     }
 }
 
 /*
- * printString :
+ * LCDPrintString :
  *	Show a string
  *********************************************************************************
  */
-void printString(unsigned char row, unsigned char col, char *pStr)
+void LCDPrintString(unsigned char row, unsigned char col, char *pStr)
 {
     char *p;
     p = pStr;
@@ -310,10 +311,10 @@ void printString(unsigned char row, unsigned char col, char *pStr)
     {
         while (*p)
         {
-            showChar(row, col, *p);
+            LCDShowChar(row, col, *p);
             p++;
             col++;
-            if (col >= 16)
+            if (col >= LCDDev.numCols)
             {
             	col=0;
             	row++;
@@ -327,19 +328,25 @@ void printString(unsigned char row, unsigned char col, char *pStr)
 }
 
 /*
- * lcdInit :
- *	Initialise the LCD, and return a handle to
- *	that LCD, or -1 if any error.
+ * lCDInit :
+ *	Initialise the LCD
+ *      Specify device address, row and columns
  *********************************************************************************
  */
-void LCDinit()
+void LCDInit(int address, int row, int col)
 {
-
-    LCDDev.devAddr=0x27;
-    //i2c_init(0x27, 0);
-    wiringOliI2CSetup(0x27);
-    LCDDev.numRows=4;
-    LCDDev.numCols=16;
+    int fd;
+    LCDDev.devAddr=address;
+    // Bus 0 at address specified
+    fd = wiringOliI2CSetup(0, LCDDev.devAddr);
+    if (fd < 0)
+    {
+      printf("Error initializing I2C bus");
+      return;
+    }
+    LCDDev.fd = fd;
+    LCDDev.numRows=row;
+    LCDDev.numCols=col;
     delayMicroseconds(50000);
     expandWrite(LCDDev.backLightEn);
     LCDDev.backLightEn=BACKLIGHTON;
@@ -361,9 +368,9 @@ void LCDinit()
     delayMicroseconds(50000);
 
     writeCmd(FUNCTIONSET | LCDDev.dispalyFunction);
-    displayOn();
-    cursorOn();
-    clear();
-    autoScrollOff();
-    home();
+    LCDDisplayOn();
+    LCDCursorOn();
+    LCDClear();
+    LCDAutoScrollOff();
+    LCDHome();
 }

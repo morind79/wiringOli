@@ -67,6 +67,7 @@ testPortD:        testPortD.o
 testDisplay:        testDisplay.o
 	@echo [link]
 	@$(CC) -o $@ testDisplay.o $(LDFLAGS) $(LDLIBS)
+
 testI2CLCD:        testI2CLCD.o
 	@echo [link]
 	@$(CC) -o $@ testI2CLCD.o $(LDFLAGS) $(LDLIBS)

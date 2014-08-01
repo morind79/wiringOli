@@ -31,6 +31,7 @@ extern "C" {
 typedef struct LCD
 {
     unsigned char devAddr;            // Device address
+    int fd;                           // File descriptor of I2C stream
     unsigned char dispalyFunction;    // Display function configuration data
     unsigned char displayControl;     // Display control configuration data
     unsigned char displayMode;        // Display mode configuration data
@@ -65,25 +66,25 @@ typedef struct LCD
 #define BACKLIGHTON    0x08
 #define BACKLIGHTOFF   0x00
 
-extern void clear(void);
-extern void home(void);
-extern void displayOff(void);
-extern void displayOn(void);
-extern void blinkOff(void);
-extern void blinkOn(void);
-extern void cursorOff(void);
-extern void cursorOn(void);
-extern void scrollDisplayLeft(void);
-extern void scrollDisplayRight(void);
-extern void backlightOff(void);
-extern void backlightOn(void);
-extern void autoScrollOff(void);
-extern void autoScrollOn(void);
-extern void createChar(unsigned char location, unsigned char charMap[]);
-extern void LCDinit();
-extern void setCursor(unsigned char row, unsigned char col);
-extern void showChar(unsigned char row, unsigned char col, char ch);
-extern void printString(unsigned char row, unsigned char col, char *pStr);
+extern void LCDClear(void);
+extern void LCDHome(void);
+extern void LCDDisplayOff(void);
+extern void LCDDisplayOn(void);
+extern void LCDBlinkOff(void);
+extern void LCDBlinkOn(void);
+extern void LCDCursorOff(void);
+extern void LCDCursorOn(void);
+extern void LCDScrollDisplayLeft(void);
+extern void LCDScrollDisplayRight(void);
+extern void LCDBacklightOff(void);
+extern void LCDBacklightOn(void);
+extern void LCDAutoScrollOff(void);
+extern void LCDAutoScrollOn(void);
+extern void LCDCreateChar(unsigned char location, unsigned char charMap[]);
+extern void LCDInit(int address, int row, int col);
+extern void LCDSetCursor(unsigned char row, unsigned char col);
+extern void LCDShowChar(unsigned char row, unsigned char col, char ch);
+extern void LCDPrintString(unsigned char row, unsigned char col, char *pStr);
 
 #ifdef __cplusplus
 }

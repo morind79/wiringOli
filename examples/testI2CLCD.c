@@ -22,7 +22,7 @@
  *    along with wiringOli.  If not, see <http://www.gnu.org/licenses/>.
  ***********************************************************************
  */
- 
+#include <stdio.h>
 #include <wiringOli.h>
 #include <wiringOliI2C.h>
 #include <oliExt.h>
@@ -32,7 +32,10 @@ int main()
 {
   // Setup GPIO
   wiringOliSetup();
-  LCDinit();
-
+  printf("LCD Init...\n");
+  // LCD at address 0x27, with 4 rows and 20 columns
+  LCDInit(0x27, 4, 20);
+  LCDPrintString(0, 0, "Test");
+  LCDPrintString(1, 0, "This is second line");
   return(0);
 }

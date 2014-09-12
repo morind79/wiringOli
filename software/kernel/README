@@ -1,0 +1,30 @@
+To enable MCP2515 support for CAN, kernel must be compiled using the following options :
+
+[*] Networking support --->
+....<M> CAN bus subsystem support --->
+........<M> Raw CAN Protocol (raw access with CAN-ID filtering)
+........<M> Broadcast Manager CAN Protocol (with content filtering)
+............CAN Device Drivers --->
+................<M> Platform CAN drivers with Netlink support
+................[*] CAN bit-timing calculation
+................<M> Microchip MCP251x SPI CAN controllers
+................[*] CAN devices debugging messages
+
+....Device Drivers --->
+........[*] SPI support --->
+............<M> BCM2798 SPI controller driver (SPI0)
+............<M> User mode SPI driver support
+.......-*- GPIO Support --->
+............[*] /sys/class/gpio/... (sysfs interface)
+
+
+-> apt-get install ncurses-dev build-essential git
+-> git clone https://github.com/linux-sunxi/linux-sunxi
+-> cd linux-sunxi/
+Download a20_defconfig then copy a20_defconfig file to configs directory:
+-> cp a20_defconfig linux-sunxi/arch/arm/configs/.
+-> make ARCH=arm a20_defconfig
+-> make ARCH=arm menuconfig
+download the patch sunxi-i2c.patch and apply the patch:
+-> patch -p0 < sunxi-i2c.patch
+-> make ARCH=arm -j3

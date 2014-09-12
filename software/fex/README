@@ -1,0 +1,36 @@
+Original script file (named script_original.bin) has been adapted to do the following :
+
+1 - Add serial port
+
+UART0 -> Console port ttyS0 (unchanged), 12v serial lines on COM1 port
+UART2 -> Enabled, now ttyS1, used in EnergyMeter port
+         This port is using line PI18=TX and PI19=RX on UEXT2 pin 7 and 8 respectively.
+UART4 -> Enabled, now ttyS2, used for serial external device (3.3v=P5 connector or 12v=COM2 serial lines)
+         This port is using line PG10=TX and PG11=RX on GPIO-1 pin 25 and 26 respectively. 
+UART6 -> ttyS3 (unchanged, just tty number changed), used for SIM900
+UART7 -> ttyS4 (unchanged, just tty number changed), used for XBee
+
+2 - Disabling SPI1
+
+Because UART2 is using same pin as SPI1, SPI1 has been disabled.
+
+3 - Activating CAN via MCP2515 (interruption on PI14=gpio_pin_13)
+
+[spi_board0]
+modalias="mcp2515"
+max_speed_hz=16000000
+bus_num=2
+chip_select=0
+mode=3
+full_duplex=0
+manual_cs=0
+irq_gpio=13
+
+[gpio_para]
+...
+gpio_pin_13 = port:PI14<5><default><default><default>
+...
+
+Also kernel should be compiled to support MCP2515, please see kernel compilation.
+
+New script.bin and script.fex files are the one with these changes.

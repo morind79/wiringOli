@@ -232,8 +232,11 @@ spi_sclk = port:PA06<3><default><default><default>
 spi_mosi = port:PA07<3><default><default><default>
 spi_miso = port:PA08<3><default><default><default>
 
+[spi_devices]
+spi_dev_num = 1
+
 [spi_board0]
-modalias="mcp2515"
+modalias="spidev"
 max_speed_hz=16000000
 bus_num=2
 chip_select=0
@@ -1038,7 +1041,7 @@ gpio_pin_9 = port:PE08<0><default><default><default>
 gpio_pin_10 = port:PE09<0><default><default><default>
 gpio_pin_11 = port:PE10<0><default><default><default>
 gpio_pin_12 = port:PE11<0><default><default><default>
-gpio_pin_13 = port:PI14<5><default><default><default>
+gpio_pin_13 = port:PI14<0><default><default><default>
 gpio_pin_14 = port:PI15<0><default><default><default>
 gpio_pin_15 = port:PI00<0><default><default><default>
 gpio_pin_16 = port:PI01<0><default><default><default>

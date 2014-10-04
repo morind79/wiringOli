@@ -63,6 +63,16 @@ int pinOliPortD(int pin)
 }
 
 /*
+ * pinOliPortGeneral :
+ *	Get board pin corresponding to Portgeneral pin numbering
+ *********************************************************************************
+ */
+int pinOliPortGeneral(int pin)
+{
+  return pinPortGeneral[pin];
+}
+
+/*
  * pinOliDisplay :
  *	Get board pin corresponding to Display pin numbering
  *********************************************************************************
@@ -113,6 +123,16 @@ void pinModePortD(int pin, int mode)
 }
 
 /*
+ * pinModePortGeneral :
+ *	Sets the mode of a pin to be INPUT, OUTPUT
+ *********************************************************************************
+ */
+void pinModePortGeneral(int pin, int mode)
+{
+  pinMode(pinOliPortGeneral(pin), mode);
+}
+
+/*
  * pullUpDnCtrlPortA :
  *	Control the internal pull-up/down resistors on PortA pin
  *      pud=0 -> pull disable, 1 -> pull-up, 2 -> pull-down
@@ -157,6 +177,17 @@ void pullUpDnCtrlPortD(int pin, int pud)
 }
 
 /*
+ * pullUpDnCtrlPortGeneral :
+ *	Control the internal pull-up/down resistors on PortGeneral pin
+ *      pud=0 -> pull disable, 1 -> pull-up, 2 -> pull-down
+ *********************************************************************************
+ */
+void pullUpDnCtrlPortGeneral(int pin, int pud)
+{
+  pullUpDnControlGpio(pinOliPortGeneral(pin), pud);
+}
+
+/*
  * digitalReadPortA :
  *	Read the value of a given PortA pin, returning HIGH or LOW
  *********************************************************************************
@@ -197,6 +228,16 @@ int digitalReadPortD(int pin)
 }
 
 /*
+ * digitalReadPortGeneral :
+ *	Read the value of a given PortGeneral pin, returning HIGH or LOW
+ *********************************************************************************
+ */
+int digitalReadPortGeneral(int pin)
+{
+  return(digitalRead(pinOliPortGeneral(pin)));
+}
+
+/*
  * digitalWritePortA :
  *	Set an output bit
  *********************************************************************************
@@ -234,6 +275,16 @@ void digitalWritePortC(int pin, int value)
 void digitalWritePortD(int pin, int value)
 {
   digitalWrite(pinOliPortD(pin), value);
+}
+
+/*
+ * digitalWritePortGeneral :
+ *	Set an output bit
+ *********************************************************************************
+ */
+void digitalWritePortGeneral(int pin, int value)
+{
+  digitalWrite(pinOliPortGeneral(pin), value);
 }
 
 /*

@@ -176,6 +176,14 @@ extern void digitalWrite(int pin, int value);
 // Interrupt
 extern int waitForInterrupt(int pin, int mS);
 
+// Threads
+extern int  oliThreadCreate(void *(*fn)(void *)) ;
+extern void oliLock(int key) ;
+extern void oliUnlock(int key) ;
+
+// Schedulling priority
+extern int oliHiPri(int pri) ;
+
 // Extras from arduino land
 extern void delay(unsigned int howLong);
 extern void delayMicroseconds(unsigned int howLong);

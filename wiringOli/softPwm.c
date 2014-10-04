@@ -65,7 +65,7 @@ static OLI_THREAD(softPwmThread)
   pin = newPin;
   newPin = -1;
 
-  piHiPri(50);
+  oliHiPri(50);
 
   for (;;)
   {

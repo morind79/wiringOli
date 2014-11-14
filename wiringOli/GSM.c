@@ -1,32 +1,8 @@
-/*
- * ITEAD RPI GSM Library:
- *	SIM900 Module library for the Raspberry Pi
- *	Copyright (c) 2013 ITEAD STUDIO
- ***********************************************************************
- * This file is part of PI GSM Library:
- *    	
- *    http://blog.iteadstudio.com/raspberry-pi-sim900-gsmgprs-module-adapter-kit/
- *    RPI GSM Library is free software: you can redistribute it and/or modify
- *    it under the terms of the GNU Lesser General Public License as published by
- *    the Free Software Foundation, either version 3 of the License, or
- *    (at your option) any later version.
- *
- *    RPI GSM Library is distributed in the hope that it will be useful,
- *    but WITHOUT ANY WARRANTY; without even the implied warranty of
- *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *    GNU Lesser General Public License for more details.
- *
- *    You should have received a copy of the GNU Lesser General Public License
- *    along with wiringPi.  If not, see <http://www.gnu.org/licenses/>.
- ***********************************************************************
- */
-
-
 #include "GSM.h"
 
 #include "oliExt.h"
 #include "wiringSerial.h"
-#define DEBUG_PRINT
+//#define DEBUG_PRINT
 //#define DEBUG_SMS_ENABLED
 int gFD;			// variables connected with communication buffer
 
@@ -72,7 +48,7 @@ void DebugPrint(const char *string_to_print, byte last_debug_print)
 {
   if (last_debug_print) 
   {
-    printf("%s",string_to_print);
+    printf("%d",string_to_print);
 
     SendATCmdWaitResp("AT", 500, 50, "OK", 1);
   }
@@ -87,7 +63,7 @@ void DebugPrintD(int number_to_print, byte last_debug_print)
   {
     SendATCmdWaitResp("AT", 500, 50, "OK", 1);
   }
-printf("\n");
+  printf("\n");
 }
 #endif
 
@@ -101,178 +77,171 @@ void TurnOn(long baud_rate)
 {
   int i;
   oliExtSetup();
-  digitalWriteSIM900_RST(1);
-  delay(1000);
+  digitalWriteSIM900_ON(0);
   digitalWriteSIM900_RST(0);
-  SetCommLineStatus(CLS_ATCMD);
-  serialBegin(baud_rate);
-  
-  #ifdef DEBUG_PRINT
-   // parameter 0 - because module is off so it is not necessary 
-   // to send finish AT<CR> here
-   DebugPrint("DEBUG: baud ", 0);
-   DebugPrintD(baud_rate, 0);
-  #endif
+	SetCommLineStatus(CLS_ATCMD);
+  	serialBegin(baud_rate);
 
-  if (AT_RESP_ERR_NO_RESP == SendATCmdWaitResp("AT", 500, 100, "OK", 5)) 
-  {		//check power
-    // there is no response => turn on the module
+	#ifdef DEBUG_PRINT
+	// parameter 0 - because module is off so it is not necessary 
+	// to send finish AT<CR> here
+	DebugPrint("DEBUG: baud ", 0);
+	DebugPrintD(baud_rate, 0);
+	#endif
 
-    #ifdef DEBUG_PRINT
-      // parameter 0 - because module is off so it is not necessary 
-      // to send finish AT<CR> here
-      DebugPrint("DEBUG: GSM module is off\r\n", 0);
-      DebugPrint("DEBUG: start the module\r\n", 0);
-    #endif
+	if (AT_RESP_ERR_NO_RESP == SendATCmdWaitResp("AT", 500, 100, "OK", 5)) 
+	{		//check power
+    	// there is no response => turn on the module
 
-    // generate turn on pulse
+		#ifdef DEBUG_PRINT
+			// parameter 0 - because module is off so it is not necessary 
+			// to send finish AT<CR> here
+			DebugPrint("DEBUG: GSM module is off\r\n", 0);
+			DebugPrint("DEBUG: start the module\r\n", 0);
+		#endif
 
-    digitalWriteSIM900_ON(1);
-    delay(1200);
-    //sleep(2);
-    digitalWriteSIM900_ON(0);
-    delay(5000);
-    //sleep(5);
-  }
-  else
-  {
-    #ifdef DEBUG_PRINT
-      // parameter 0 - because module is off so it is not necessary 
-      // to send finish AT<CR> here
-      DebugPrint("DEBUG: GSM module is on\r\n", 0);
-    #endif
-  }
+		// generate turn on pulse
 
-  if (AT_RESP_ERR_DIF_RESP == SendATCmdWaitResp("AT", 500, 100, "OK", 5)) 
-  {		//check OK
+		digitalWriteSIM900_ON(HIGH);
+		delay(1200);
+		//sleep(2);
+		digitalWriteSIM900_ON(LOW);
+		delay(5000);
+		//sleep(5);
+	}
+	else
+	{
+		#ifdef DEBUG_PRINT
+			// parameter 0 - because module is off so it is not necessary 
+			// to send finish AT<CR> here
+			DebugPrint("DEBUG: GSM module is on\r\n", 0);
+		#endif
+	}
 
-    #ifdef DEBUG_PRINT
-      // parameter 0 - because module is off so it is not necessary 
-      // to send finish AT<CR> here
-      DebugPrint("DEBUG: the baud is not ok\r\n", 0);
-    #endif
-    //SendATCmdWaitResp("AT+IPR=9600", 500, 50, "OK", 5);
+	if (AT_RESP_ERR_DIF_RESP == SendATCmdWaitResp("AT", 500, 100, "OK", 5)) 
+	{		//check OK
+
+		#ifdef DEBUG_PRINT
+			// parameter 0 - because module is off so it is not necessary 
+			// to send finish AT<CR> here
+			DebugPrint("DEBUG: the baud is not ok\r\n", 0);
+		#endif
+			  //SendATCmdWaitResp("AT+IPR=9600", 500, 50, "OK", 5);
 		
-    for (i=1;i<7;i++)
-    {
-      switch (i) 
-      {
-        case 1:
-          serialBegin(4800);
-          #ifdef DEBUG_PRINT
-            DebugPrint("DEBUG: provo Baud 4800\r\n", 0);
-          #endif
-          break;
-        case 2:
-          serialBegin(9600);
-          #ifdef DEBUG_PRINT
-            DebugPrint("DEBUG: provo Baud 9600\r\n", 0);
-          #endif
-          break;
-        case 3:
-          serialBegin(19200);
-          #ifdef DEBUG_PRINT
-            DebugPrint("DEBUG: provo Baud 19200\r\n", 0);
-          #endif
-          break;
-        case 4:
-          serialBegin(38400);
-          #ifdef DEBUG_PRINT
-            DebugPrint("DEBUG: provo Baud 38400\r\n", 0);
-          #endif
-          break;
-        case 5:
-          serialBegin(57600);
-          #ifdef DEBUG_PRINT
-            DebugPrint("DEBUG: provo Baud 57600\r\n", 0);
-          #endif
-          break;
-        case 6:
-          serialBegin(115200);
-          #ifdef DEBUG_PRINT
-            DebugPrint("DEBUG: provo Baud 115200\r\n", 0);
-          #endif
-          break;
-          // if nothing else matches, do the default
-          // default is optional
-      }
-      /*
-      p_char = strchr((char *)(comm_buf),',');
-      p_char1 = p_char+2; // we are on the first phone number character
-      p_char = strchr((char *)(p_char1),'"');
-      if (p_char != NULL) {
-        *p_char = 0; // end of string
-        strcpy(phone_number, (char *)(p_char1));
-      }
-      */  
+		for (i=1; i<7; i++)
+		{
+			switch (i) 
+			{
+				case 1:
+					serialBegin(4800);
+					#ifdef DEBUG_PRINT
+						DebugPrint("DEBUG: provo Baud 4800\r\n", 0);
+					#endif
+				break;
+				case 2:
+					serialBegin(9600);
+					#ifdef DEBUG_PRINT
+						DebugPrint("DEBUG: provo Baud 9600\r\n", 0);
+					#endif
+				break;
+				case 3:
+					serialBegin(19200);
+					#ifdef DEBUG_PRINT
+						DebugPrint("DEBUG: provo Baud 19200\r\n", 0);
+					#endif
+				break;
+				case 4:
+					serialBegin(38400);
+					#ifdef DEBUG_PRINT
+						DebugPrint("DEBUG: provo Baud 38400\r\n", 0);
+					#endif
+				break;
+				case 5:
+					serialBegin(57600);
+					#ifdef DEBUG_PRINT
+						DebugPrint("DEBUG: provo Baud 57600\r\n", 0);
+					#endif
+				break;
+				case 6:
+					serialBegin(115200);
+					#ifdef DEBUG_PRINT
+						DebugPrint("DEBUG: provo Baud 115200\r\n", 0);
+					#endif
+				break;
+				// if nothing else matches, do the default
+				// default is optional
+			}
+			/*
+			p_char = strchr((char *)(comm_buf),',');
+			p_char1 = p_char+2; // we are on the first phone number character
+			p_char = strchr((char *)(p_char1),'"');
+			if (p_char != NULL) {
+			*p_char = 0; // end of string
+			strcpy(phone_number, (char *)(p_char1));
+			}
+			*/  
 
-      delay(100);
-      /*sprintf (buff,"AT+IPR=%f",baud_rate);
-      #ifdef DEBUG_PRINT
-        // parameter 0 - because module is off so it is not necessary 
-        // to send finish AT<CR> here
-        DebugPrint("DEBUG: Stringa ", 0);
-        DebugPrint(buff, 0);
-      #endif
-      */
-      serialPuts(gFD, "AT+IPR=");
-      //serialPuts(baud_rate);
-      serialPuts(gFD, ChangeIToS(baud_rate));
-      serialPuts(gFD, "\r"); // send <CR>
-      delay(500);
-      serialBegin(baud_rate);
-      delay(100);
-      if (AT_RESP_OK == SendATCmdWaitResp("AT", 500, 100, "OK", 5))
-      {
-        #ifdef DEBUG_PRINT
-          // parameter 0 - because module is off so it is not necessary
-          // to send finish AT<CR> here
-          DebugPrint("DEBUG: ricevuto ok da modulo, baud impostato: ", 0);
-          DebugPrintD(baud_rate, 0);
-        #endif
-        break;
-      }
-    }
+			delay(100);
+			/*sprintf (buff,"AT+IPR=%f",baud_rate);
+				#ifdef DEBUG_PRINT
+					// parameter 0 - because module is off so it is not necessary 
+					// to send finish AT<CR> here
+					DebugPrint("DEBUG: Stringa ", 0);
+					DebugPrint(buff, 0);
+				#endif
+				*/
+			serialPuts(gFD, "AT+IPR=");
+			//serialPuts(gFD, baud_rate);
+			serialPuts(gFD, ChangeIToS(baud_rate));
+			serialPuts(gFD, "\r"); // send <CR>
+			delay(500);
+			serialBegin(baud_rate);
+			delay(100);
+			if (AT_RESP_OK == SendATCmdWaitResp("AT", 500, 100, "OK", 5))
+			{
+					#ifdef DEBUG_PRINT
+						// parameter 0 - because module is off so it is not necessary
+						// to send finish AT<CR> here
+						DebugPrint("DEBUG: ricevuto ok da modulo, baud impostato: ", 0);
+						DebugPrintD(baud_rate, 0);
+					#endif
+					break;
+			}
 
-    // communication line is not used yet = free
-    SetCommLineStatus(CLS_FREE);
-    // pointer is initialized to the first item of comm. buffer
-    p_comm_buf = &comm_buf[0];
+		}
 
-    if (AT_RESP_ERR_NO_RESP == SendATCmdWaitResp("AT", 500, 50, "OK", 5)) 
-    {
-      #ifdef DEBUG_PRINT
-        // parameter 0 - because module is off so it is not necessary 
-        // to send finish AT<CR> here
-        DebugPrint("DEBUG: No answer from the module\r\n", 0);
-      #endif
-    }
-    else
-    {
-      #ifdef DEBUG_PRINT
-        // parameter 0 - because module is off so it is not necessary 
-        // to send finish AT<CR> here
-        DebugPrint("DEBUG: 1 baud ok\r\n", 0);
-      #endif
-    }
-  }
-  else
-  {
-    #ifdef DEBUG_PRINT
-      DebugPrint("DEBUG: 2 GSM module is on and baud is ok\r\n", 0);
-    #endif
-    if (REG_REGISTERED != CheckRegistration())
-    {
-      #ifdef DEBUG_PRINT
-        DebugPrint("DEBUG: GSM on, but restart it\r\n", 0);
-      #endif
-      digitalWriteSIM900_ON(1);
-      delay(1200);
-      //sleep(2);
-      digitalWriteSIM900_ON(0);
-      delay(5000);
-    }
-  }
+			// communication line is not used yet = free
+			SetCommLineStatus(CLS_FREE);
+			// pointer is initialized to the first item of comm. buffer
+			p_comm_buf = &comm_buf[0];
+
+		if (AT_RESP_ERR_NO_RESP == SendATCmdWaitResp("AT", 500, 50, "OK", 5)) 
+		{
+			#ifdef DEBUG_PRINT
+				// parameter 0 - because module is off so it is not necessary 
+				// to send finish AT<CR> here
+				DebugPrint("DEBUG: No answer from the module\r\n", 0);
+			#endif
+		}
+		else
+		{
+
+			#ifdef DEBUG_PRINT
+				// parameter 0 - because module is off so it is not necessary 
+				// to send finish AT<CR> here
+				DebugPrint("DEBUG: 1 baud ok\r\n", 0);
+			#endif
+		}
+
+
+	}
+	else
+	{
+		#ifdef DEBUG_PRINT
+			DebugPrint("DEBUG: 2 GSM module is on and baud is ok\r\n", 0);
+		#endif
+
+	}
 
   SetCommLineStatus(CLS_FREE);
   // send collection of first initialization parameters for the GSM module    
@@ -521,7 +490,7 @@ if (rx_state == RX_NOT_STARTED)
 				// so just readout character from circular RS232 buffer
 				// to find out when communication id finished(no more characters
 				// are received in inter-char timeout)
-				//*p_comm_buf = serialGetchar(gFD);
+				//*p_comm_buf = serialGetchar();
 			//}
 		}
 
@@ -724,7 +693,7 @@ char SendATCmdWaitResp(char *AT_cmd_string,uint16_t start_comm_tmout, uint16_t m
 	// delay 500 msec. before sending next repeated AT command
 	// so if we have no_of_attempts=1 tmout will not occurred
 		if (i > 0) delay(500);
-		write(gFD,AT_cmd_string,strlen(AT_cmd_string));
+		write(gFD, AT_cmd_string, strlen(AT_cmd_string));
 		serialPuts(gFD, "\r");
 
 		status = WaitResp(start_comm_tmout, max_interchar_tmout);
@@ -746,8 +715,11 @@ char SendATCmdWaitResp(char *AT_cmd_string,uint16_t start_comm_tmout, uint16_t m
 		// --------------------
 		ret_val = AT_RESP_ERR_NO_RESP;
 		}
+
 	}
-  return (ret_val);
+
+
+return (ret_val);
 }
 
 /*int millis(void)
@@ -859,7 +831,7 @@ char *ChangeIToS(int IntNU)
 {
 	char *String;
 	
-	sprintf(String,"%d",IntNU);
+	sprintf(String, "%d", IntNU);
 
 	return String;
 
@@ -867,7 +839,7 @@ char *ChangeIToS(int IntNU)
 
 void serialBegin(int baud)
 {
-  gFD = serialOpen("/dev/ttyS3", baud, 8, 1);
+	gFD = serialOpen("/dev/ttyS3", baud, 8, 1);
 }
 
 void SetCommLineStatus(byte new_status)
@@ -959,7 +931,7 @@ byte CheckRegistration(void)
       // must be sent only after registration
       // --------------------------------------------
       if (!IsInitialized()) 
-	    {
+	  {
         module_status |= STATUS_INITIALIZED;
         SetCommLineStatus(CLS_FREE);
         InitParam(PARAM_SET_1);
@@ -1038,7 +1010,7 @@ char SendSMS(char *number_str, char *message_str)
     // 1000 msec. for initial comm tmout
     // 50 msec. for inter character timeout
     if (RX_FINISHED_STR_RECV == WaitRespAdd(1000, 50, ">")) 
-	  {
+	{
       // send SMS text
       serialPuts(gFD, message_str);
 /*

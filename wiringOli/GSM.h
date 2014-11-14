@@ -1,26 +1,3 @@
-/*
- * ITEAD RPI GSM Library:
- *	SIM900 Module library for the Raspberry Pi
- *	Copyright (c) 2013 ITEAD STUDIO
- ***********************************************************************
- * This file is part of RPI GSM Library:
- *    	
- *    http://blog.iteadstudio.com/raspberry-pi-sim900-gsmgprs-module-adapter-kit/
- *    RPI GSM Library is free software: you can redistribute it and/or modify
- *    it under the terms of the GNU Lesser General Public License as published by
- *    the Free Software Foundation, either version 3 of the License, or
- *    (at your option) any later version.
- *
- *    PI GSM Library is distributed in the hope that it will be useful,
- *    but WITHOUT ANY WARRANTY; without even the implied warranty of
- *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *    GNU Lesser General Public License for more details.
- *
- *    You should have received a copy of the GNU Lesser General Public License
- *    along with wiringPi.  If not, see <http://www.gnu.org/licenses/>.
- ***********************************************************************
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -164,7 +141,7 @@ void DebugPrintD(int number_to_print, byte last_debug_print);
 void TurnOn(long baud_rate);
 void InitParam(byte group);
 char InitSMSMemory(void); 
-// routines regarding communication with the GSM module	和GSM模块通讯部分的程�?
+// routines regarding communication with the GSM module
 void RxInit(uint16_t start_comm_tmout, uint16_t max_interchar_tmout);
 byte IsRxFinished(void);
 byte IsStringReceived(char const *compare_string);
@@ -186,7 +163,7 @@ byte CheckRegistration(void);
 byte IsRegistered(void);
 byte IsInitialized(void);
 
-// SMS's methods		短信部分
+// SMS's methods
 char SendSMS(char *number_str, char *message_str);
 char SendSMSSpecified(byte sim_phonebook_position, char *message_str);
 char IsSMSPresent(byte required_status);
@@ -195,21 +172,21 @@ char GetAuthorizedSMS(	byte position, char *phone_number, char *SMS_text, byte m
 						byte first_authorized_pos, byte last_authorized_pos);
 char DeleteSMS(byte position);
 
-// Phonebook's methods	sim卡上的电话号码处�?
+// Phonebook's methods	sim
 char GetPhoneNumber(byte position, char *phone_number);
 char WritePhoneNumber(byte position, char *phone_number);
 char DelPhoneNumber(byte position);
 char ComparePhoneNumber(byte position, char *phone_number);
 
-// Speaker volume methods - set, increase, decrease	扬声器处理部�?
+// Speaker volume methods - set, increase, decrease
 char SetSpeakerVolume(byte speaker_volume);
 char IncSpeakerVolume(void);
 char DecSpeakerVolume(void);
 
-// sends DTMF signal	发送双音多频信�?
+// sends DTMF signal
 char SendDTMFSignal(byte dtmf_tone);
 
-// User button methods	用户按键处理	
+// User button methods
 byte IsUserButtonEnable(void);
 void DisableUserButton(void);
 void EnableUserButton(void);
@@ -217,4 +194,4 @@ byte IsUserButtonPushed(void);
 
 void CallS(char *number_string);
 void Call(int sim_position);
-byte CallStatusWithAuth(char *phone_number, byte first_authorized_pos, byte last_authorized_pos);
+byte CallStatusWithAuth(char *phone_number,	byte first_authorized_pos, byte last_authorized_pos);

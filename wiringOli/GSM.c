@@ -1,251 +1,410 @@
+/*
+ * GSM.c:
+ *	GSM access routines
+ ***********************************************************************
+ * This file is part of wiringOli:
+ *	http://morind.free.fr
+ *
+ *    wiringOli is free software: you can redistribute it and/or modify
+ *    it under the terms of the GNU Lesser General Public License as published by
+ *    the Free Software Foundation, either version 3 of the License, or
+ *    (at your option) any later version.
+ *
+ *    wiringoli is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU Lesser General Public License for more details.
+ *
+ *    You should have received a copy of the GNU Lesser General Public License
+ *    along with wiringOli.  If not, see <http://www.gnu.org/licenses/>.
+ ***********************************************************************
+ */
+#include <oliExt.h>
+#include <wiringOli.h>
+#include <wiringSerial.h>
+#include <errno.h>
 #include "GSM.h"
 
-#include "oliExt.h"
-#include "wiringSerial.h"
-//#define DEBUG_PRINT
-//#define DEBUG_SMS_ENABLED
-int gFD;			// variables connected with communication buffer
+char *p_comm_buf;               // Pointer to the communication buffer
+int comm_buf_len;               // Number of characters in the buffer
+int rx_state;                   // Internal state of rx state machine
+uint16_t start_reception_tmout; // Max tmout for starting reception
+uint16_t interchar_tmout;       // Previous time in ms
+unsigned long prev_time;        // Previous time in ms
+int last_speaker_volume;
 
-byte *p_comm_buf;               // pointer to the communication buffer
-byte comm_buf_len;              // num. of characters in the buffer
-byte rx_state;                  // internal state of rx state machine
-byte last_speaker_volume;
-uint16_t start_reception_tmout; // max tmout for starting reception
-uint16_t interchar_tmout;       // previous time in msec.
-unsigned long prev_time;        // previous time in msec.
+char comm_buf[COMM_BUF_LEN+1];
 
-byte comm_buf[COMM_BUF_LEN+1];
+int gFD;			// Variables connected with communication buffer
 
-#ifdef DEBUG_PRINT
-/**********************************************************
-Two methods print out debug information to the standard output
-- it means to the serial line.
-First method prints string.
-Second method prints integer numbers.
-
-Note:
-=====
-The serial line is connected to the GSM module and is 
-used for sending AT commands. There is used "trick" that GSM
-module accepts not valid AT command strings because it doesn't
-understand them and still waits for some valid AT command.
-So after all debug strings are sent we send just AT<CR> as
-a valid AT command and GSM module responds by OK. So previous 
-debug strings are overwritten and GSM module is not influenced
-by these debug texts 
-
-
-string_to_print:  pointer to the string to be print out
-last_debug_print: 0 - this is not last debug info, we will
-                      continue with sending... so don't send
-                      AT<CR>(see explanation above)
-                  1 - we are finished with sending debug info 
-                      for this time and finished AT<CR> 
-                      will be sent(see explanation above)
-
-**********************************************************/
-void DebugPrint(const char *string_to_print, byte last_debug_print)
+// SIM900 Communication ********************************************************
+int GetCommLineStatus(void)
 {
-  if (last_debug_print) 
-  {
-    printf("%d",string_to_print);
-
-    SendATCmdWaitResp("AT", 500, 50, "OK", 1);
-  }
-  else printf(string_to_print);
-  printf("\n");
+  return comm_line_status;
 }
 
-void DebugPrintD(int number_to_print, byte last_debug_print)
+void SetCommLineStatus(int new_status)
 {
-  printf("%d",number_to_print);
-  if (last_debug_print)
-  {
-    SendATCmdWaitResp("AT", 500, 50, "OK", 1);
-  }
-  printf("\n");
+  comm_line_status = new_status;
 }
-#endif
 
 /**********************************************************
-  Checks if the GSM module is responding 
-  to the AT command
-  - if YES nothing is made 
-  - if NO GSM module is turned on 
+Function to enable or disable echo
+Echo(1)   enable echo mode
+Echo(0)   disable echo mode
 **********************************************************/
-void TurnOn(long baud_rate)
+void Echo(int state)
 {
-  int i;
-  oliExtSetup();
-  digitalWriteSIM900_ON(0);
-  digitalWriteSIM900_RST(0);
-	SetCommLineStatus(CLS_ATCMD);
-  	serialBegin(baud_rate);
+	if (state == 0 || state == 1)
+	{
+	  SetCommLineStatus(CLS_ATCMD);
+	  serialPuts(gFD, "ATE");
+	  switch(state)
+	  {
+		case 0:
+		serialPuts(gFD, "0");
+		break;
+		case 1:
+		serialPuts(gFD, "1");
+		break;
+		default:
+		break;
+	  }
+	  //serialPuts(gFD, (int)state);    
+	  serialPuts(gFD, "\r");
+	  delay(500);
+	  SetCommLineStatus(CLS_FREE);
+	}
+}
 
-	#ifdef DEBUG_PRINT
-	// parameter 0 - because module is off so it is not necessary 
-	// to send finish AT<CR> here
-	DebugPrint("DEBUG: baud ", 0);
-	DebugPrintD(baud_rate, 0);
-	#endif
+/**********************************************************
+Method sends AT command and waits for response
 
-	if (AT_RESP_ERR_NO_RESP == SendATCmdWaitResp("AT", 500, 100, "OK", 5)) 
-	{		//check power
-    	// there is no response => turn on the module
+return:
+AT_RESP_ERR_NO_RESP = -1,   // no response received
+AT_RESP_ERR_DIF_RESP = 0,   // response_string is different from the response
+AT_RESP_OK = 1,             // response_string was included in the response
+**********************************************************/
+char SendATCmdWaitResp(char *AT_cmd_string, uint16_t start_comm_tmout, uint16_t max_interchar_tmout, char const *response_string, int no_of_attempts)
+{
+	int status;
+	char ret_val = AT_RESP_ERR_NO_RESP;
+	int i;
 
-		#ifdef DEBUG_PRINT
-			// parameter 0 - because module is off so it is not necessary 
-			// to send finish AT<CR> here
-			DebugPrint("DEBUG: GSM module is off\r\n", 0);
-			DebugPrint("DEBUG: start the module\r\n", 0);
-		#endif
+	for (i = 0; i < no_of_attempts; i++)
+	{
+	  // Wait 500ms before sending next repeated AT command so if we have no_of_attempts=1 tmout will not occurred
+		if (i > 0) delay(500);
+		serialPuts(gFD, AT_cmd_string);
+		serialPuts(gFD, "\r");
 
-		// generate turn on pulse
+		status = WaitResp(start_comm_tmout, max_interchar_tmout);
 
-		digitalWriteSIM900_ON(HIGH);
-		delay(1200);
-		//sleep(2);
-		digitalWriteSIM900_ON(LOW);
-		delay(5000);
-		//sleep(5);
+		if (status == RX_FINISHED)
+		{
+		  // Something was received but what was received?
+			if(IsStringReceived(response_string))
+			{
+				ret_val = AT_RESP_OK;
+				break;  // Response is OK => finish
+			}
+			else ret_val = AT_RESP_ERR_DIF_RESP;
+		}
+		else
+		{
+		  // Nothing was received
+		  ret_val = AT_RESP_ERR_NO_RESP;
+		}
+	}
+  return (ret_val);
+}
+
+/**********************************************************
+Method waits for response
+
+start_comm_tmout    - maximum waiting time for receiving the first response
+character (in msec.)
+max_interchar_tmout - maximum tmout between incoming characters
+in msec.
+return:
+RX_FINISHED         finished, some character was received
+RX_TMOUT_ERR        finished, no character received
+initial communication tmout occurred
+**********************************************************/
+int WaitResp(uint16_t start_comm_tmout, uint16_t max_interchar_tmout)
+{
+	int status;
+
+	RxInit(start_comm_tmout, max_interchar_tmout);
+	// Wait until response is not finished
+	do
+	{
+	  status = IsRxFinished();
+	}
+	while (status == RX_NOT_FINISHED);
+	return (status);
+}
+
+/**********************************************************
+Method waits for response with specific response string
+
+start_comm_tmout    - maximum waiting time for receiving the first response
+character (in msec.)
+max_interchar_tmout - maximum tmout between incoming characters
+in msec.
+expected_resp_string - expected string
+return:
+RX_FINISHED_STR_RECV,     finished and expected string received
+RX_FINISHED_STR_NOT_RECV  finished, but expected string not received
+RX_TMOUT_ERR              finished, no character received
+initial communication tmout occurred
+**********************************************************/
+int WaitRespAdd(uint16_t start_comm_tmout, uint16_t max_interchar_tmout, char const *expected_resp_string)
+{
+  int status;
+  int ret_val;
+
+  RxInit(start_comm_tmout, max_interchar_tmout);
+  // Wait until response is not finished
+  do
+  {
+    status = IsRxFinished();
+  } while (status == RX_NOT_FINISHED);
+
+	if (status == RX_FINISHED)
+	{
+	  // Something was received but what was received?
+		if(IsStringReceived(expected_resp_string))
+		{
+		  // Expected string was received
+		  ret_val = RX_FINISHED_STR_RECV;
+		}
+		else ret_val = RX_FINISHED_STR_NOT_RECV;
 	}
 	else
 	{
-		#ifdef DEBUG_PRINT
-			// parameter 0 - because module is off so it is not necessary 
-			// to send finish AT<CR> here
-			DebugPrint("DEBUG: GSM module is on\r\n", 0);
-		#endif
+		// nothing was received
+		ret_val = RX_TMOUT_ERR;
 	}
+  return (ret_val);
+}
 
-	if (AT_RESP_ERR_DIF_RESP == SendATCmdWaitResp("AT", 500, 100, "OK", 5)) 
-	{		//check OK
+/**********************************************************
+Initializes receiving process
 
-		#ifdef DEBUG_PRINT
-			// parameter 0 - because module is off so it is not necessary 
-			// to send finish AT<CR> here
-			DebugPrint("DEBUG: the baud is not ok\r\n", 0);
-		#endif
-			  //SendATCmdWaitResp("AT+IPR=9600", 500, 50, "OK", 5);
-		
+start_comm_tmout    - maximum waiting time for receiving the first response
+character (in msec.)
+max_interchar_tmout - maximum tmout between incoming characters in ms
+if there is no other incoming character longer then specified
+tmout(in msec) receiving process is considered as finished
+**********************************************************/
+void RxInit(uint16_t start_comm_tmout, uint16_t max_interchar_tmout)
+{
+	rx_state = RX_NOT_STARTED;
+	start_reception_tmout = start_comm_tmout;
+	interchar_tmout = max_interchar_tmout;
+	prev_time = millis();
+	comm_buf[0] = 0x00; 		// End of string
+	p_comm_buf = &comm_buf[0];
+	comm_buf_len = 0;
+}
+
+/**********************************************************
+Method checks if receiving process is finished or not.
+Rx process is finished if defined inter-character tmout is reached
+
+returns:
+RX_NOT_FINISHED = 0,// not finished yet
+RX_FINISHED,        // finished - inter-character tmout occurred
+RX_TMOUT_ERR,       // initial communication tmout occurred
+**********************************************************/
+int IsRxFinished(void)
+{
+	int num_of_bytes;
+	int ret_val = RX_NOT_FINISHED;  // Default not finished
+	// Rx state machine
+  if (rx_state == RX_NOT_STARTED)
+  {
+	  // Reception is not started yet - check tmout
+	  if (!serialDataAvail(gFD))
+	  {
+  	  // Still no character received => check timeout
+  		if ((unsigned long)(millis() - prev_time) >= start_reception_tmout)
+  		{
+  			// Timeout elapsed => GSM module didn't start with response so communication is takes as finished
+  			comm_buf[comm_buf_len] = 0x00;
+  			ret_val = RX_TMOUT_ERR;
+  		}
+  	}
+  	else
+  	{
+  		// At least one character received => so init inter-character counting process again and go to the next state
+  		prev_time = millis(); // Init tmout for inter-character space
+  		rx_state = RX_ALREADY_STARTED;
+  	}
+  }
+	if (rx_state == RX_ALREADY_STARTED)
+	{
+		// Reception already started
+		// check new received bytes
+		// only in case we have place in the buffer
+		num_of_bytes = serialDataAvail(gFD);
+		// If there are some received bytes postpone the timeout
+		if (num_of_bytes) prev_time = millis();
+		// read all received bytes
+		while (num_of_bytes)
+		{
+			num_of_bytes--;
+			*p_comm_buf = serialGetchar(gFD);
+			p_comm_buf++;
+			comm_buf_len++;
+			comm_buf[comm_buf_len] = 0x00;  // And finish currently received characters
+		}
+		// Finally check the inter-character timeout
+		if ((unsigned long)(millis() - prev_time) >= interchar_tmout)
+		{
+			// Timeout between received character was reached reception is finished
+			comm_buf[comm_buf_len] = 0x00;  // For sure finish string again but it is not necessary
+			ret_val = RX_FINISHED;
+		}
+	}
+  return (ret_val);
+}
+
+/**********************************************************
+Method checks received bytes
+
+compare_string - pointer to the string which should be find
+
+return: 0 - string was NOT received
+1 - string was received
+**********************************************************/
+int IsStringReceived(char const *compare_string)
+{
+	char *ch;
+	int ret_val = 0;
+
+	if(comm_buf_len)
+	{
+	  ch = strstr((char *)comm_buf, compare_string);
+
+		if (ch != NULL)
+		{
+			ret_val = 1;
+		}
+		else
+		{
+			//printf("%s\n",*ch);
+		}
+	}
+  return (ret_val);
+}
+
+// Serial port *****************************************************************
+void serialBegin(long baud)
+{
+  if ((gFD = serialOpen("/dev/ttyS4", baud, 8, 1)) < 0)
+  {
+    fprintf(stderr, "Unable to open serial device: %s\n", strerror(errno));
+  }
+}
+
+void serialEnd()
+{
+  serialClose(gFD);
+}
+
+long checkBaud()
+{
+  int i;
+  long baud = 9600;
+  if (AT_RESP_ERR_DIF_RESP == SendATCmdWaitResp("AT", 500, 100, "OK", 5)) 
+	{		
 		for (i=1; i<7; i++)
 		{
 			switch (i) 
 			{
 				case 1:
-					serialBegin(4800);
-					#ifdef DEBUG_PRINT
-						DebugPrint("DEBUG: provo Baud 4800\r\n", 0);
-					#endif
+					baud = 4800;
 				break;
 				case 2:
-					serialBegin(9600);
-					#ifdef DEBUG_PRINT
-						DebugPrint("DEBUG: provo Baud 9600\r\n", 0);
-					#endif
+					baud = 9600;
 				break;
 				case 3:
-					serialBegin(19200);
-					#ifdef DEBUG_PRINT
-						DebugPrint("DEBUG: provo Baud 19200\r\n", 0);
-					#endif
+					baud = 19200;
 				break;
 				case 4:
-					serialBegin(38400);
-					#ifdef DEBUG_PRINT
-						DebugPrint("DEBUG: provo Baud 38400\r\n", 0);
-					#endif
+					baud = 38400;
 				break;
 				case 5:
-					serialBegin(57600);
-					#ifdef DEBUG_PRINT
-						DebugPrint("DEBUG: provo Baud 57600\r\n", 0);
-					#endif
+					baud = 57600;
 				break;
 				case 6:
-					serialBegin(115200);
-					#ifdef DEBUG_PRINT
-						DebugPrint("DEBUG: provo Baud 115200\r\n", 0);
-					#endif
+					baud = 115200;
 				break;
-				// if nothing else matches, do the default
-				// default is optional
 			}
-			/*
-			p_char = strchr((char *)(comm_buf),',');
-			p_char1 = p_char+2; // we are on the first phone number character
-			p_char = strchr((char *)(p_char1),'"');
-			if (p_char != NULL) {
-			*p_char = 0; // end of string
-			strcpy(phone_number, (char *)(p_char1));
-			}
-			*/  
-
 			delay(100);
-			/*sprintf (buff,"AT+IPR=%f",baud_rate);
-				#ifdef DEBUG_PRINT
-					// parameter 0 - because module is off so it is not necessary 
-					// to send finish AT<CR> here
-					DebugPrint("DEBUG: Stringa ", 0);
-					DebugPrint(buff, 0);
-				#endif
-				*/
 			serialPuts(gFD, "AT+IPR=");
-			//serialPuts(gFD, baud_rate);
-			serialPuts(gFD, ChangeIToS(baud_rate));
-			serialPuts(gFD, "\r"); // send <CR>
+			serialPuts(gFD, ChangeIToS(baud));
+			serialPuts(gFD, "\r"); // Send <CR>
 			delay(500);
-			serialBegin(baud_rate);
-			delay(100);
-			if (AT_RESP_OK == SendATCmdWaitResp("AT", 500, 100, "OK", 5))
+      if (AT_RESP_OK == SendATCmdWaitResp("AT", 500, 100, "OK", 5))
 			{
-					#ifdef DEBUG_PRINT
-						// parameter 0 - because module is off so it is not necessary
-						// to send finish AT<CR> here
-						DebugPrint("DEBUG: ricevuto ok da modulo, baud impostato: ", 0);
-						DebugPrintD(baud_rate, 0);
-					#endif
-					break;
+				return(baud);
 			}
-
 		}
+  }
+  return(0);
+}
 
-			// communication line is not used yet = free
-			SetCommLineStatus(CLS_FREE);
-			// pointer is initialized to the first item of comm. buffer
-			p_comm_buf = &comm_buf[0];
+// Others **********************************************************************
+char *ChangeIToS(int IntNU)
+{
+	char *String = (char*)malloc(80);
+	sprintf(String, "%d", IntNU);
+	return(String);
+}
 
-		if (AT_RESP_ERR_NO_RESP == SendATCmdWaitResp("AT", 500, 50, "OK", 5)) 
-		{
-			#ifdef DEBUG_PRINT
-				// parameter 0 - because module is off so it is not necessary 
-				// to send finish AT<CR> here
-				DebugPrint("DEBUG: No answer from the module\r\n", 0);
-			#endif
-		}
-		else
-		{
-
-			#ifdef DEBUG_PRINT
-				// parameter 0 - because module is off so it is not necessary 
-				// to send finish AT<CR> here
-				DebugPrint("DEBUG: 1 baud ok\r\n", 0);
-			#endif
-		}
-
-
-	}
-	else
-	{
-		#ifdef DEBUG_PRINT
-			DebugPrint("DEBUG: 2 GSM module is on and baud is ok\r\n", 0);
-		#endif
-
-	}
-
+// GSM Power *******************************************************************
+void powerOn()
+{
+  SetCommLineStatus(CLS_ATCMD);
+  digitalWriteSIM900_ON(LOW);
+  digitalWriteSIM900_RST(LOW);
+  
+  // generate turn on pulse
+  printf("Power On\n");
+	digitalWriteSIM900_ON(HIGH);
+	delay(1200);
+	//sleep(2);
+	digitalWriteSIM900_ON(LOW);
+	delay(5000);
   SetCommLineStatus(CLS_FREE);
-  // send collection of first initialization parameters for the GSM module    
+}
+
+void reset()
+{
+  digitalWriteSIM900_RST(LOW);
+  delay(10);
+  digitalWriteSIM900_RST(HIGH);
+  delay(100);
+  digitalWriteSIM900_RST(LOW);
+}
+
+int isOn()
+{
+  if(AT_RESP_OK == SendATCmdWaitResp("AT", 500, 100, "OK", 5))
+    return(1);
+  else
+    return(0);
+}
+
+// GSM *************************************************************************
+void init()
+{
+  SetCommLineStatus(CLS_FREE);
   InitParam(PARAM_SET_0);
+  InitParam(PARAM_SET_1);
 }
 
 /**********************************************************
@@ -254,18 +413,13 @@ void TurnOn(long baud_rate)
   group:  0 - parameters of group 0 - not necessary to be registered in the GSM
           1 - parameters of group 1 - it is necessary to be registered
 **********************************************************/
-void InitParam(byte group)
+void InitParam(int group)
 {
-
   switch (group) 
   {
     case PARAM_SET_0:
-      // check comm line
+      // Check comm line
       if (CLS_FREE != GetCommLineStatus()) return;
-
-	  	#ifdef DEBUG_PRINT
-			DebugPrint("DEBUG: configure the module PARAM_SET_0\r\n", 0);
-		#endif
       SetCommLineStatus(CLS_ATCMD);
 
       // Reset to the factory settings
@@ -288,12 +442,8 @@ void InitParam(byte group)
       break;
 
     case PARAM_SET_1:
-      // check comm line
+      // Check comm line
       if (CLS_FREE != GetCommLineStatus()) return;
-
-	  	#ifdef DEBUG_PRINT
-			DebugPrint("DEBUG: configure the module PARAM_SET_1\r\n", 0);
-		#endif
       SetCommLineStatus(CLS_ATCMD);
 
       // Request calling line identification
@@ -312,7 +462,6 @@ void InitParam(byte group)
       // Auto answer after first ring enabled
       // auto answer is not used
       //SendATCmdWaitResp("ATS0=1", 500, 50, "OK", 5);
-
       // select ringer path to handsfree
       //SendATCmdWaitResp("AT#SRP=1", 500, 50, "OK", 5);
       // select ringer sound level
@@ -328,8 +477,8 @@ void InitParam(byte group)
       SendATCmdWaitResp("AT+CPBS=\"SM\"", 1000, 50, "OK", 5);
       break;
   }
-
 }
+
 /**********************************************************
 Method initializes memory for the incoming SMS in the Telit
 module - SMSs will be stored in the SIM card
@@ -348,7 +497,7 @@ return:
         1 - SMS memory was initialized
 
 **********************************************************/
-char InitSMSMemory(void) 
+char InitSMSMemory() 
 {
   char ret_val = -1;
 
@@ -372,601 +521,6 @@ char InitSMSMemory(void)
   return (ret_val);
 }
 
-/**********************************************************
-Initializes receiving process
-
-start_comm_tmout    - maximum waiting time for receiving the first response
-character (in msec.)
-max_interchar_tmout - maximum tmout between incoming characters
-in msec.
-if there is no other incoming character longer then specified
-tmout(in msec) receiving process is considered as finished
-**********************************************************/
-void RxInit(uint16_t start_comm_tmout, uint16_t max_interchar_tmout)
-{
-	rx_state = RX_NOT_STARTED;
-	start_reception_tmout = start_comm_tmout;
-	interchar_tmout = max_interchar_tmout;
-	prev_time = millis();
-	comm_buf[0] = 0x00; 		// end of string
-	p_comm_buf = &comm_buf[0];
-	comm_buf_len = 0;
-//	serialFlush(gFD); 		// erase rx circular buffer
-}
-/**********************************************************
-Method checks if receiving process is finished or not.
-Rx process is finished if defined inter-character tmout is reached
-
-returns:
-RX_NOT_FINISHED = 0,// not finished yet
-RX_FINISHED,        // finished - inter-character tmout occurred
-RX_TMOUT_ERR,       // initial communication tmout occurred
-**********************************************************/
-byte IsRxFinished(void)
-{
-	byte num_of_bytes;
-	byte ret_val = RX_NOT_FINISHED;  // default not finished
-	int i,j;
-	// Rx state machine
-	// ----------------
-
-if (rx_state == RX_NOT_STARTED)
-{
-	// Reception is not started yet - check tmout
-	if (!serialDataAvail(gFD))
-	{
-	// still no character received => check timeout
-	/*
-	#ifdef DEBUG_GSMRX
-
-	DebugPrint("\r\nDEBUG: reception timeout", 0);
-	Serial.print((unsigned long)(millis() - prev_time));
-	DebugPrint("\r\nDEBUG: start_reception_tmout\r\n", 0);
-	Serial.print(start_reception_tmout);
-
-
-	#endif
-	*/
-		if ((unsigned long)(millis() - prev_time) >= start_reception_tmout)
-		{
-			// timeout elapsed => GSM module didn't start with response
-			// so communication is takes as finished
-			/*
-			#ifdef DEBUG_GSMRX
-			DebugPrint("\r\nDEBUG: RECEPTION TIMEOUT", 0);
-			#endif
-			*/
-			comm_buf[comm_buf_len] = 0x00;
-			ret_val = RX_TMOUT_ERR;
-		}
-	}
-	else
-	{
-		// at least one character received => so init inter-character
-		// counting process again and go to the next state
-		prev_time = millis(); // init tmout for inter-character space
-		rx_state = RX_ALREADY_STARTED;
-	}
-}
-
-	if (rx_state == RX_ALREADY_STARTED)
-	{
-		// Reception already started
-		// check new received bytes
-		// only in case we have place in the buffer
-		num_of_bytes = serialDataAvail(gFD);
-		// if there are some received bytes postpone the timeout
-		if (num_of_bytes) prev_time = millis();
-
-		// read all received bytes
-		//printf("%d\n",num_of_bytes);
-
-		while (num_of_bytes)
-		{
-			//printf("%d\n",num_of_bytes);
-			num_of_bytes--;
-			//if (comm_buf_len < COMM_BUF_LEN)
-			//{
-				// we have still place in the GSM internal comm. buffer =>
-				// move available bytes from circular buffer
-				// to the rx buffer
-				// printf("understand\n");
-				*p_comm_buf = serialGetchar(gFD);
-
-				p_comm_buf++;
-				comm_buf_len++;
-				comm_buf[comm_buf_len] = 0x00;  // and finish currently received characters
-				// so after each character we have
-				// valid string finished by the 0x00
-			//}
-			//else
-			//{
-				// comm buffer is full, other incoming characters
-				// will be discarded
-				// but despite of we have no place for other characters
-				// we still must to wait until
-				// inter-character tmout is reached
-
-				// so just readout character from circular RS232 buffer
-				// to find out when communication id finished(no more characters
-				// are received in inter-char timeout)
-				//*p_comm_buf = serialGetchar();
-			//}
-		}
-
-		// finally check the inter-character timeout
-		/*
-		#ifdef DEBUG_GSMRX
-
-		DebugPrint("\r\nDEBUG: intercharacter", 0);
-		Serial.print((unsigned long)(millis() - prev_time));
-		DebugPrint("\r\nDEBUG: interchar_tmout\r\n", 0);
-		Serial.print(interchar_tmout);
-
-
-		#endif
-		*/
-		if ((unsigned long)(millis() - prev_time) >= interchar_tmout)
-		{
-			// timeout between received character was reached
-			// reception is finished
-			// ---------------------------------------------
-
-			/*
-			#ifdef DEBUG_GSMRX
-
-			DebugPrint("\r\nDEBUG: OVER INTER TIMEOUT", 0);
-			#endif
-			*/
-			comm_buf[comm_buf_len] = 0x00;  // for sure finish string again
-			// but it is not necessary
-			ret_val = RX_FINISHED;
-		}
-	}
-
-	#ifdef DEBUG_GSMRX
-	if (ret_val == RX_FINISHED)
-	{
-		DebugPrint("DEBUG: Received string\r\n", 0);
-		for (i=0; i<comm_buf_len; i++)
-		{
-			serialPuts(gFD, byte(comm_buf[i]));
-		}
-	}
-	#endif
-
-return (ret_val);
-}
-/**********************************************************
-Method checks received bytes
-
-compare_string - pointer to the string which should be find
-
-return: 0 - string was NOT received
-1 - string was received
-**********************************************************/
-byte IsStringReceived(char const *compare_string)
-{
-	int i;
-	char *ch;
-	byte ret_val = 0;
-
-	if(comm_buf_len)
-	{
-
-/*	#ifdef DEBUG_GSMRX
-	DebugPrint("DEBUG: Compare the string: \r\n", 0);
-	for (i=0; i<comm_buf_len; i++)
-	{
-	printf("%c",comm_buf[i]);
-	}
-
-	DebugPrint("\r\nDEBUG: with the string: \r\n", 0);
-	printf(compare_string);
-	DebugPrint("\r\n", 0);
-	#endif
-*/
-	ch = strstr((char *)comm_buf, compare_string);
-/*
-	for(i=0;i<200;i++)
-	{
-		printf("%c",comm_buf[i]);
-	}
-	printf("\n");
-	printf("the compare string is :%s\n",compare_string);
-*/
-		if (ch != NULL)
-		{
-			ret_val = 1;
-			#ifdef DEBUG_PRINT
-			DebugPrint("\r\nDEBUG: expected string was received\r\n", 0);
-			#endif
-
-		}
-		else
-		{
-			#ifdef DEBUG_PRINT
-			//printf("%s\n",*ch);
-			DebugPrint("\r\nDEBUG: expected string was NOT received\r\n", 0);
-			#endif
-
-		}
-	}
-
-return (ret_val);
-}
-
-/**********************************************************
-Method waits for response
-
-start_comm_tmout    - maximum waiting time for receiving the first response
-character (in msec.)
-max_interchar_tmout - maximum tmout between incoming characters
-in msec.
-return:
-RX_FINISHED         finished, some character was received
-
-RX_TMOUT_ERR        finished, no character received
-initial communication tmout occurred
-**********************************************************/
-byte WaitResp(uint16_t start_comm_tmout, uint16_t max_interchar_tmout)
-{
-	byte status;
-
-	RxInit(start_comm_tmout, max_interchar_tmout);
-	// wait until response is not finished
-	do
-	{
-	status = IsRxFinished();
-	}
-	while (status == RX_NOT_FINISHED);
-	return (status);
-}
-
-/**********************************************************
-Method waits for response with specific response string
-
-start_comm_tmout    - maximum waiting time for receiving the first response
-character (in msec.)
-max_interchar_tmout - maximum tmout between incoming characters
-in msec.
-expected_resp_string - expected string
-return:
-RX_FINISHED_STR_RECV,     finished and expected string received
-RX_FINISHED_STR_NOT_RECV  finished, but expected string not received
-RX_TMOUT_ERR              finished, no character received
-initial communication tmout occurred
-**********************************************************/
-byte WaitRespAdd(uint16_t start_comm_tmout, uint16_t max_interchar_tmout,
-char const *expected_resp_string)
-{
-byte status;
-byte ret_val;
-
-RxInit(start_comm_tmout, max_interchar_tmout);
-// wait until response is not finished
-do
-{
-status = IsRxFinished();
-} while (status == RX_NOT_FINISHED);
-
-	if (status == RX_FINISHED)
-	{
-	// something was received but what was received?
-	// ---------------------------------------------
-
-		if(IsStringReceived(expected_resp_string))
-		{
-		// expected string was received
-		// ----------------------------
-		ret_val = RX_FINISHED_STR_RECV;
-		}
-		else ret_val = RX_FINISHED_STR_NOT_RECV;
-	}
-	else
-	{
-		// nothing was received
-		// --------------------
-		ret_val = RX_TMOUT_ERR;
-	}
-return (ret_val);
-}
-
-
-/**********************************************************
-Method sends AT command and waits for response
-
-return:
-AT_RESP_ERR_NO_RESP = -1,   // no response received
-AT_RESP_ERR_DIF_RESP = 0,   // response_string is different from the response
-AT_RESP_OK = 1,             // response_string was included in the response
-**********************************************************/
-char SendATCmdWaitResp(char *AT_cmd_string,uint16_t start_comm_tmout, uint16_t max_interchar_tmout,char const *response_string,byte no_of_attempts)
-{
-	byte status;
-
-	char ret_val = AT_RESP_ERR_NO_RESP;
-	byte i;
-
-	for (i = 0; i < no_of_attempts; i++)
-	{
-	// delay 500 msec. before sending next repeated AT command
-	// so if we have no_of_attempts=1 tmout will not occurred
-		if (i > 0) delay(500);
-		write(gFD, AT_cmd_string, strlen(AT_cmd_string));
-		serialPuts(gFD, "\r");
-
-		status = WaitResp(start_comm_tmout, max_interchar_tmout);
-
-		if (status == RX_FINISHED)
-		{
-		// something was received but what was received?
-		// ---------------------------------------------
-			if(IsStringReceived(response_string))
-			{
-				ret_val = AT_RESP_OK;
-				break;  // response is OK => finish
-			}
-			else ret_val = AT_RESP_ERR_DIF_RESP;
-		}
-		else
-		{
-		// nothing was received
-		// --------------------
-		ret_val = AT_RESP_ERR_NO_RESP;
-		}
-
-	}
-
-
-return (ret_val);
-}
-
-/*int millis(void)
-{
-	int i;
-	struct timeval tv;
-	gettimeofday(&tv,NULL);
-	i = (int)(tv.tv_usec);
-	return i;
-}*/
-/**********************************************************
-Method picks up an incoming call
-
-return:
-**********************************************************/
-void PickUp(void)
-{
-  if (CLS_FREE != GetCommLineStatus()) return;
-  SetCommLineStatus(CLS_ATCMD);
-  serialPuts(gFD, "ATA");
-  SetCommLineStatus(CLS_FREE);
-}
-
-/**********************************************************
-Method hangs up incoming or active call
-
-return:
-**********************************************************/
-void HangUp(void)
-{
-  if (CLS_FREE != GetCommLineStatus()) return;
-  SetCommLineStatus(CLS_ATCMD);
-  serialPuts(gFD, "ATH");
-  SetCommLineStatus(CLS_FREE);
-}
-/**********************************************************
-Method checks status of call
-
-return:
-      CALL_NONE         - no call activity
-      CALL_INCOM_VOICE  - incoming voice
-      CALL_ACTIVE_VOICE - active voice
-      CALL_NO_RESPONSE  - no response to the AT command 
-      CALL_COMM_LINE_BUSY - comm line is not free
-**********************************************************/
-byte CallStatus(void)
-{
-  byte ret_val = CALL_NONE;
-
-  if (CLS_FREE != GetCommLineStatus()) return (CALL_COMM_LINE_BUSY);
-  SetCommLineStatus(CLS_ATCMD);
-  serialPuts(gFD, "AT+CPAS");
-
-  // 5 sec. for initial comm tmout
-  // 50 msec. for inter character timeout
-  if (RX_TMOUT_ERR == WaitResp(5000, 50)) 
-  {
-    // nothing was received (RX_TMOUT_ERR)
-    // -----------------------------------
-    ret_val = CALL_NO_RESPONSE;
-  }
-  else
-  {
-    // something was received but what was received?
-    // ---------------------------------------------
-    // ready (device allows commands from TA/TE)
-    // <CR><LF>+CPAS: 0<CR><LF> <CR><LF>OK<CR><LF>
-    // unavailable (device does not allow commands from TA/TE)
-    // <CR><LF>+CPAS: 1<CR><LF> <CR><LF>OK<CR><LF> 
-    // unknown (device is not guaranteed to respond to instructions)
-    // <CR><LF>+CPAS: 2<CR><LF> <CR><LF>OK<CR><LF> - NO CALL
-    // ringing
-    // <CR><LF>+CPAS: 3<CR><LF> <CR><LF>OK<CR><LF> - NO CALL
-    // call in progress
-    // <CR><LF>+CPAS: 4<CR><LF> <CR><LF>OK<CR><LF> - NO CALL
-//    if(IsStringReceived("0"))
-//    {
-      // ready - there is no call
-      // ------------------------
-//      ret_val = CALL_NONE;
-	//printf("call phone number is 0\n");
-//    }
-    if(IsStringReceived("3"))
-    {
-      // incoming call
-      // --------------
-      ret_val = CALL_INCOM_VOICE;
-	//printf("call phone number is 3\n");
-    }
-    else if(IsStringReceived("4"))
-    {
-      // active call
-      // -----------
-      ret_val = CALL_ACTIVE_VOICE;
-	//printf("call phone number is 4\n");
-    }
-    	else if(IsStringReceived("0"))
-	{
-	ret_val=CALL_NONE;
-	}
-  }
-
-  SetCommLineStatus(CLS_FREE);
-  return (ret_val);
-
-}
-
-char *ChangeIToS(int IntNU)
-{
-	char *String;
-	
-	sprintf(String, "%d", IntNU);
-
-	return String;
-
-}
-
-void serialBegin(int baud)
-{
-	gFD = serialOpen("/dev/ttyS3", baud, 8, 1);
-}
-
-void SetCommLineStatus(byte new_status)
-{
-comm_line_status = new_status;
-}
-
-byte GetCommLineStatus(void)
-{
-return comm_line_status;
-}
-/**********************************************************
-Function to enable or disable echo
-Echo(1)   enable echo mode
-Echo(0)   disable echo mode
-**********************************************************/
-
-void Echo(byte state)
-{
-	if (state == 0 || state == 1)
-	{
-	  SetCommLineStatus(CLS_ATCMD);
-	  #ifdef DEBUG_PRINT
-	  DebugPrint("DEBUG Echo\r\n",1);
-	  #endif
-	  serialPuts(gFD, "ATE");
-	  switch(state)
-	  {
-		case 0:
-		serialPuts(gFD, "0");
-		break;
-		case 1:
-		serialPuts(gFD, "1");
-		break;
-		default:
-		break;
-	  }
-	  //serialPuts(gFD, (int)state);    
-	  serialPuts(gFD, "\r");
-	  delay(500);
-	  SetCommLineStatus(CLS_FREE);
-	}
-}
-int LibVer(void)
-{
-  return (GSM_LIB_VERSION);
-}
-/**********************************************************
-Method checks if the GSM module is registered in the GSM net
-- this method communicates directly with the GSM module
-  in contrast to the method IsRegistered() which reads the
-  flag from the module_status (this flag is set inside this method)
-
-- must be called regularly - from 1sec. to cca. 10 sec.
-
-return values: 
-      REG_NOT_REGISTERED  - not registered
-      REG_REGISTERED      - GSM module is registered
-      REG_NO_RESPONSE     - GSM doesn't response
-      REG_COMM_LINE_BUSY  - comm line between GSM module and Arduino is not free
-                            for communication
-**********************************************************/
-byte CheckRegistration(void)
-{
-  byte status;
-  byte ret_val = REG_NOT_REGISTERED;
-
-  if (CLS_FREE != GetCommLineStatus()) return (REG_COMM_LINE_BUSY);
-  SetCommLineStatus(CLS_ATCMD);
-  serialPuts(gFD, "AT+CREG?");
-  // 5 sec. for initial comm tmout
-  // 50 msec. for inter character timeout
-  status = WaitResp(5000, 50); 
-
-  if (status == RX_FINISHED) 
-  {
-    // something was received but what was received?
-    // ---------------------------------------------
-    if(IsStringReceived("+CREG: 0,1") || IsStringReceived("+CREG: 0,5")) 
-	  {
-      // it means module is registered
-      // ----------------------------
-      module_status |= STATUS_REGISTERED;
-    
-    
-      // in case GSM module is registered first time after reset
-      // sets flag STATUS_INITIALIZED
-      // it is used for sending some init commands which 
-      // must be sent only after registration
-      // --------------------------------------------
-      if (!IsInitialized()) 
-	  {
-        module_status |= STATUS_INITIALIZED;
-        SetCommLineStatus(CLS_FREE);
-        InitParam(PARAM_SET_1);
-      }
-      ret_val = REG_REGISTERED;      
-    }
-    else 
-	{
-      // NOT registered
-      // --------------
-      module_status &= ~STATUS_REGISTERED;
-      ret_val = REG_NOT_REGISTERED;
-    }
-  }
-  else 
-  {
-    // nothing was received
-    // --------------------
-    ret_val = REG_NO_RESPONSE;
-  }
-  SetCommLineStatus(CLS_FREE);
- 
-
-  return (ret_val);
-}
-byte IsRegistered(void)
-{
-  return (module_status & STATUS_REGISTERED);
-}
-byte IsInitialized(void)
-{
-  return (module_status & STATUS_INITIALIZED);
-}
-
-/*Method sends SMS*/
 /**********************************************************
 Method sends SMS
 
@@ -994,53 +548,41 @@ an example of usage:
 char SendSMS(char *number_str, char *message_str) 
 {
   char ret_val = -1;
-  byte i;
+  char bytesToSend = 0;
+  int i;
 
   if (CLS_FREE != GetCommLineStatus()) return (ret_val);
   SetCommLineStatus(CLS_ATCMD);  
-  ret_val = 0; // still not send
-  // try to send SMS 3 times in case there is some problem
+  ret_val = 0; // Still not send
+  // Try to send SMS 3 times in case there is some problem
   for (i = 0; i < 3; i++) 
   {
     // send  AT+CMGS="number_str"
     serialPuts(gFD, "AT+CMGS=\"");
     serialPuts(gFD, number_str);
     serialPuts(gFD, "\"\r");
-
     // 1000 msec. for initial comm tmout
     // 50 msec. for inter character timeout
     if (RX_FINISHED_STR_RECV == WaitRespAdd(1000, 50, ">")) 
-	{
-      // send SMS text
+	  {
+      // Send SMS text
       serialPuts(gFD, message_str);
-/*
-//#ifdef DEBUG_SMS_ENABLED
-	// SMS will not be sent = we will not pay => good for debugging
-      serialPuts(gFD, ChangeIToS(0x1b));
-      if (RX_FINISHED_STR_RECV == WaitRespAdd(7000, 50, "OK")) 
-	  {
-//#else 
-      serialPuts(gFD, ChangeIToS(0x1a));
-	  //mySerial.flush(); // erase rx circular buffer
+      // Ctrl-Z
+      bytesToSend = 26;
+      serialPutchar(gFD, bytesToSend);
       if (RX_FINISHED_STR_RECV == WaitRespAdd(7000, 5000, "+CMGS")) 
-	  {
-//#endif
+      {
         // SMS was send correctly 
         ret_val = 1;
-		#ifdef DEBUG_PRINT
-			//DebugPrint("SMS was send correctly \r\n", 0);
-		#endif
         break;
       }
       else continue;
-
-      }
+    }
 	  else 
 	  {
-	  // try again
-	  continue;
-	  }
-*/    }
+	    // try again
+	    continue;
+    }
   }
 
   SetCommLineStatus(CLS_FREE);
@@ -1071,23 +613,21 @@ an example of usage:
         GSM gsm;
         gsm.SendSMS(1, "SMS text");
 **********************************************************/
-char SendSMSSpecified(byte sim_phonebook_position, char *message_str) 
+char SendSMSSpecified(int sim_phonebook_position, char *message_str) 
 {
   char ret_val = -1;
   char sim_phone_number[20];
-
-  ret_val = 0; // SMS is not send yet
+  // SMS is not send yet
+  ret_val = 0; 
   if (sim_phonebook_position == 0) return (-3);
   if (1 == GetPhoneNumber(sim_phonebook_position, sim_phone_number)) 
   {
-    // there is a valid number at the spec. SIM position
-    // => send SMS
-    // -------------------------------------------------
+    // There is a valid number at the spec. SIM position
     ret_val = SendSMS(sim_phone_number, message_str);
   }
   return (ret_val);
-
 }
+
 /**********************************************************
 Method finds out if there is present at least one SMS with
 specified status
@@ -1129,15 +669,15 @@ an example of use:
           // and SMS text in sms_text
         }
 **********************************************************/
-char IsSMSPresent(byte required_status) 
+char IsSMSPresent(int required_status) 
 {
   char ret_val = -1;
   char *p_char;
-  byte status;
+  int status;
 
   if (CLS_FREE != GetCommLineStatus()) return (ret_val);
   SetCommLineStatus(CLS_ATCMD);
-  ret_val = 0; // still not present
+  ret_val = 0; // Still not present
 
   switch (required_status) 
   {
@@ -1152,13 +692,13 @@ char IsSMSPresent(byte required_status)
       break;
   }
 
-  // 5 sec. for initial comm tmout
-  // and max. 1500 msec. for inter character timeout
+  // 5s for initial comm tmout and max. 1500ms for inter character timeout
   RxInit(5000, 1500); 
-  // wait response is finished
-  do {
+  // Wait response is finished
+  do 
+  {
     if (IsStringReceived("OK"))
-	{ 
+    { 
       // perfect - we have some response, but what:
 
       // there is either NO SMS:
@@ -1174,39 +714,33 @@ char IsSMSPresent(byte required_status)
     status = IsRxFinished();
   } while (status == RX_NOT_FINISHED);
 
-  
-
-
   switch (status) 
   {
     case RX_TMOUT_ERR:
-      // response was not received in specific time
+      // Response was not received in specific time
       ret_val = -2;
       break;
-
     case RX_FINISHED:
-      // something was received but what was received?
-      // ---------------------------------------------
+      // Something was received but what was received?
       if(IsStringReceived("+CMGL:"))
-	  { 
-        // there is some SMS with status => get its position
+      { 
+        // There is some SMS with status => get its position
         // response is:
         // +CMGL: <index>,<stat>,<oa/da>,,[,<tooa/toda>,<length>]
         // <CR><LF> <data> <CR><LF>OK<CR><LF>
         p_char = strchr((char *)comm_buf,':');
         if (p_char != NULL) 
-		{
+        {
           ret_val = atoi(p_char+1);
         }
       }
       else 
-	  {
-        // other response like OK or ERROR
+	    {
+        // Other response like OK or ERROR
         ret_val = 0;
       }
 
-      // here we have WaitResp() just for generation tmout 20msec. in case OK was detected
-      // not due to receiving
+      // Here we have WaitResp() just for generation tmout 20msec. in case OK was detected not due to receiving
       WaitResp(20, 20); 
       break;
   }
@@ -1257,12 +791,12 @@ an example of usage:
           #endif
         }        
 **********************************************************/
-char GetSMS(byte position, char *phone_number, char *SMS_text, byte max_SMS_len) 
+char GetSMS(int position, char *phone_number, char *SMS_text, int max_SMS_len) 
 {
   char ret_val = -1;
   char *p_char; 
   char *p_char1;
-  byte len;
+  int len;
 
   if (position == 0) return (-3);
   if (CLS_FREE != GetCommLineStatus()) return (ret_val);
@@ -1272,7 +806,7 @@ char GetSMS(byte position, char *phone_number, char *SMS_text, byte max_SMS_len)
   
   //send "AT+CMGR=X" - where X = position
   serialPuts(gFD, "AT+CMGR=");
-  serialPuts(gFD, ChangeIToS((int)position));  
+  serialPuts(gFD, ChangeIToS(position));  
   serialPuts(gFD, "\r");
 
   // 5000 msec. for initial comm tmout
@@ -1283,22 +817,20 @@ char GetSMS(byte position, char *phone_number, char *SMS_text, byte max_SMS_len)
       // response was not received in specific time
       ret_val = -2;
       break;
-
     case RX_FINISHED_STR_NOT_RECV:
       // OK was received => there is NO SMS stored in this position
       if(IsStringReceived("OK")) 
-	  {
+      {
         // there is only response <CR><LF>OK<CR><LF> 
         // => there is NO SMS
         ret_val = GETSMS_NO_SMS;
       }
       else if(IsStringReceived("ERROR")) 
-	  {
+      {
         // error should not be here but for sure
         ret_val = GETSMS_NO_SMS;
       }
       break;
-
     case RX_FINISHED_STR_RECV:
       // find out what was received exactly
 
@@ -1306,7 +838,7 @@ char GetSMS(byte position, char *phone_number, char *SMS_text, byte max_SMS_len)
       //<CR><LF>+CMGR: "REC UNREAD","+XXXXXXXXXXXX",,"02/03/18,09:54:28+40"<CR><LF>
 		  //There is SMS text<CR><LF>OK<CR><LF>
       if(IsStringReceived("\"REC UNREAD\"")) 
-	  { 
+      { 
         // get phone number of received SMS: parse phone number string 
         // +XXXXXXXXXXXX
         // -------------------------------------------------------
@@ -1316,40 +848,37 @@ char GetSMS(byte position, char *phone_number, char *SMS_text, byte max_SMS_len)
       //<CR><LF>+CMGR: "REC READ","+XXXXXXXXXXXX",,"02/03/18,09:54:28+40"<CR><LF>
 		  //There is SMS text<CR><LF>
       else if(IsStringReceived("\"REC READ\"")) 
-	  {
+      {
         // get phone number of received SMS
-        // --------------------------------
         ret_val = GETSMS_READ_SMS;
       }
-      else {
+      else 
+      {
         // other type like stored for sending.. 
         ret_val = GETSMS_OTHER_SMS;
       }
 
       // extract phone number string
-      // ---------------------------
       p_char = strchr((char *)(comm_buf),',');
       p_char1 = p_char+2; // we are on the first phone number character
       p_char = strchr((char *)(p_char1),'"');
       if (p_char != NULL) 
-	  {
+      {
         *p_char = 0; // end of string
         strcpy(phone_number, (char *)(p_char1));
       }
 
-
       // get SMS text and copy this text to the SMS_text buffer
-      // ------------------------------------------------------
       p_char = strchr(p_char+1, 0x0a);  // find <LF>
       if (p_char != NULL) 
-	  {
+      {
         // next character after <LF> is the first SMS character
         p_char++; // now we are on the first SMS character 
 
         // find <CR> as the end of SMS string
         p_char1 = strchr((char *)(p_char), 0x0d);  
         if (p_char1 != NULL) 
-		{
+        {
           // finish the SMS text string 
           // because string must be finished for right behaviour 
           // of next strcpy() function
@@ -1363,7 +892,7 @@ char GetSMS(byte position, char *phone_number, char *SMS_text, byte max_SMS_len)
         len = strlen(p_char);
 
         if (len < max_SMS_len) 
-		{
+        {
           // buffer SMS_text has enough place for copying all SMS text
           // so copy whole SMS text
           // from the beginning of the text(=p_char position) 
@@ -1371,7 +900,7 @@ char GetSMS(byte position, char *phone_number, char *SMS_text, byte max_SMS_len)
           strcpy(SMS_text, (char *)(p_char));
         }
         else 
-		{
+        {
           // buffer SMS_text doesn't have enough place for copying all SMS text
           // so cut SMS text to the (max_SMS_len-1)
           // (max_SMS_len-1) because we need 1 position for the 0x00 as finish 
@@ -1454,32 +983,19 @@ an example of usage:
           #endif
         }
 **********************************************************/
-char GetAuthorizedSMS(byte position, char *phone_number, char *SMS_text, byte max_SMS_len,
-                           byte first_authorized_pos, byte last_authorized_pos)
+char GetAuthorizedSMS(int position, char *phone_number, char *SMS_text, int max_SMS_len, int first_authorized_pos, int last_authorized_pos)
 {
   char ret_val = -1;
-  byte i;
-
-#ifdef DEBUG_PRINT
-    DebugPrint("DEBUG GetAuthorizedSMS\r\n", 0);
-    DebugPrint("      #1: ", 0);
-    DebugPrintD(position, 0);
-    DebugPrint("      #5: ", 0);
-    DebugPrintD(first_authorized_pos, 0);
-    DebugPrint("      #6: ", 0);
-    DebugPrintD(last_authorized_pos, 1);
-#endif  
+  int i; 
 
   ret_val = GetSMS(position, phone_number, SMS_text, max_SMS_len);
   if (ret_val < 0) 
   {
     // here is ERROR return code => finish
-    // -----------------------------------
   }
   else if (ret_val == GETSMS_NO_SMS) 
   {
     // no SMS detected => finish
-    // -------------------------
   }
   else if (ret_val == GETSMS_READ_SMS)
   {
@@ -1488,22 +1004,20 @@ char GetAuthorizedSMS(byte position, char *phone_number, char *SMS_text, byte ma
     //
     // new READ SMS was detected on the specified SMS position =>
     // make authorization now
-    // ---------------------------------------------------------
     if ((first_authorized_pos == 0) && (last_authorized_pos == 0)) 
-	{
+    {
       // authorization is not required => it means authorization is OK
-      // -------------------------------------------------------------
       ret_val = GETSMS_AUTH_SMS;
     }
-    else {
+    else 
+    {
       ret_val = GETSMS_NOT_AUTH_SMS;  // authorization not valid yet
       for (i = first_authorized_pos; i <= last_authorized_pos; i++) 
-	  {
+      {
         if (ComparePhoneNumber(i, phone_number)) 
-		{
+        {
           // phone numbers are identical
           // authorization is OK
-          // ---------------------------
           ret_val = GETSMS_AUTH_SMS;
           break;  // and finish authorization
         }
@@ -1512,6 +1026,7 @@ char GetAuthorizedSMS(byte position, char *phone_number, char *SMS_text, byte ma
   }
   return (ret_val);
 }
+
 /**********************************************************
 Method deletes SMS from the specified SMS position
 
@@ -1529,7 +1044,7 @@ return:
         0 - SMS was not deleted
         1 - SMS was deleted
 **********************************************************/
-char DeleteSMS(byte position) 
+char DeleteSMS(int position) 
 {
   char ret_val = -1;
 
@@ -1543,7 +1058,6 @@ char DeleteSMS(byte position)
   serialPuts(gFD, ChangeIToS((int)position));  
   serialPuts(gFD, "\r");
 
-
   // 5000 msec. for initial comm tmout
   // 20 msec. for inter character timeout
   switch (WaitRespAdd(5000, 50, "OK")) 
@@ -1552,12 +1066,10 @@ char DeleteSMS(byte position)
       // response was not received in specific time
       ret_val = -2;
       break;
-
     case RX_FINISHED_STR_RECV:
       // OK was received => SMS deleted
       ret_val = 1;
       break;
-
     case RX_FINISHED_STR_NOT_RECV:
       // other response: e.g. ERROR => SMS was not deleted
       ret_val = 0; 
@@ -1567,6 +1079,7 @@ char DeleteSMS(byte position)
   SetCommLineStatus(CLS_FREE);
   return (ret_val);
 }
+
 /**********************************************************
 Method reads phone number string from specified SIM position
 
@@ -1607,7 +1120,7 @@ an example of usage:
           #endif
         }
 **********************************************************/
-char GetPhoneNumber(byte position, char *phone_number)
+char GetPhoneNumber(int position, char *phone_number)
 {
   char ret_val = -1;
 
@@ -1633,7 +1146,6 @@ char GetPhoneNumber(byte position, char *phone_number)
       // response was not received in specific time
       ret_val = -2;
       break;
-
     case RX_FINISHED_STR_RECV:
       // response in case valid phone number stored:
       // <CR><LF>+CPBR: <index>,<number>,<type>,<text><CR><LF>
@@ -1643,12 +1155,12 @@ char GetPhoneNumber(byte position, char *phone_number)
       // <CR><LF>OK<CR><LF>
       p_char = strchr((char *)(comm_buf),'"');
       if (p_char != NULL) 
-	  {
+      {
         p_char++;       // we are on the first phone number character
         // find out '"' as finish character of phone number string
         p_char1 = strchr((char *)(p_char),'"');
         if (p_char1 != NULL) 
-		{
+        {
           *p_char1 = 0; // end of string
         }
         // extract phone number string
@@ -1657,7 +1169,6 @@ char GetPhoneNumber(byte position, char *phone_number)
         ret_val = 1;
       }
       break;
-
     case RX_FINISHED_STR_NOT_RECV:
       // only OK or ERROR => no phone number
       ret_val = 0; 
@@ -1686,7 +1197,7 @@ return:
         0 - phone number was not written
         1 - phone number was written
 **********************************************************/
-char WritePhoneNumber(byte position, char *phone_number)
+char WritePhoneNumber(int position, char *phone_number)
 {
   char ret_val = -1;
 
@@ -1711,12 +1222,10 @@ char WritePhoneNumber(byte position, char *phone_number)
     case RX_TMOUT_ERR:
       // response was not received in specific time
       break;
-
     case RX_FINISHED_STR_RECV:
       // response is OK = has been written
       ret_val = 1;
       break;
-
     case RX_FINISHED_STR_NOT_RECV:
       // other response: e.g. ERROR
       break;
@@ -1725,7 +1234,6 @@ char WritePhoneNumber(byte position, char *phone_number)
   SetCommLineStatus(CLS_FREE);
   return (ret_val);
 }
-
 
 /**********************************************************
 Method del phone number from the specified SIM position
@@ -1744,7 +1252,7 @@ return:
         0 - phone number was not deleted
         1 - phone number was deleted
 **********************************************************/
-char DelPhoneNumber(byte position)
+char DelPhoneNumber(int position)
 {
   char ret_val = -1;
 
@@ -1766,12 +1274,10 @@ char DelPhoneNumber(byte position)
     case RX_TMOUT_ERR:
       // response was not received in specific time
       break;
-
     case RX_FINISHED_STR_RECV:
       // response is OK = has been written
       ret_val = 1;
       break;
-
     case RX_FINISHED_STR_NOT_RECV:
       // other response: e.g. ERROR
       break;
@@ -1815,19 +1321,10 @@ an example of usage:
           #endif
         }
 **********************************************************/
-char ComparePhoneNumber(byte position, char *phone_number)
+char ComparePhoneNumber(int position, char *phone_number)
 {
   char ret_val = -1;
   char sim_phone_number[20];
-
-#ifdef DEBUG_PRINT
-    DebugPrint("DEBUG ComparePhoneNumber\r\n", 0);
-    DebugPrint("      #1: ", 0);
-    DebugPrintD(position, 0);
-    DebugPrint("      #2: ", 0);
-    DebugPrint(phone_number, 1);
-#endif
-
 
   ret_val = 0; // numbers are not the same so far
   if (position == 0) return (-3);
@@ -1836,17 +1333,14 @@ char ComparePhoneNumber(byte position, char *phone_number)
     // there is a valid number at the spec. SIM position
     // -------------------------------------------------
     if (0 == strcmp(phone_number, sim_phone_number)) 
-	{
+    {
       // phone numbers are the same
-      // --------------------------
-#ifdef DEBUG_PRINT
-    DebugPrint("DEBUG ComparePhoneNumber: Phone numbers are the same", 1);
-#endif
       ret_val = 1;
     }
   }
   return (ret_val);
 }
+
 /**********************************************************
 Method sets speaker volume
 
@@ -1863,7 +1357,7 @@ return:
         -----------
         0..14 current speaker volume 
 **********************************************************/
-char SetSpeakerVolume(byte speaker_volume)
+char SetSpeakerVolume(int speaker_volume)
 {
   
   char ret_val = -1;
@@ -1883,9 +1377,10 @@ char SetSpeakerVolume(byte speaker_volume)
   {
     ret_val = -2; // ERROR
   }
-  else {
+  else 
+  {
     if(IsStringReceived("OK")) 
-	{
+    {
       last_speaker_volume = speaker_volume;
       ret_val = last_speaker_volume; // OK
     }
@@ -1910,10 +1405,10 @@ return:
         -----------
         0..14 current speaker volume 
 **********************************************************/
-char IncSpeakerVolume(void)
+char IncSpeakerVolume()
 {
   char ret_val;
-  byte current_speaker_value;
+  int current_speaker_value;
 
   current_speaker_value = last_speaker_volume;
   if (current_speaker_value < 14) 
@@ -1940,10 +1435,10 @@ return:
         -----------
         0..14 current speaker volume 
 **********************************************************/
-char DecSpeakerVolume(void)
+char DecSpeakerVolume()
 {
   char ret_val;
-  byte current_speaker_value;
+  int current_speaker_value;
 
   current_speaker_value = last_speaker_volume;
   if (current_speaker_value > 0) 
@@ -1955,6 +1450,7 @@ char DecSpeakerVolume(void)
 
   return (ret_val);
 }
+
 /**********************************************************
 Method sends DTMF signal
 This function only works when call is in progress
@@ -1972,7 +1468,7 @@ return:
         -----------
         0.. tone
 **********************************************************/
-char SendDTMFSignal(byte dtmf_tone)
+char SendDTMFSignal(int dtmf_tone)
 {
   char ret_val = -1;
 
@@ -1991,7 +1487,7 @@ char SendDTMFSignal(byte dtmf_tone)
   else 
   {
     if(IsStringReceived("OK")) 
-	{
+    {
       ret_val = dtmf_tone; // OK
     }
     else ret_val = -3; // ERROR
@@ -2000,18 +1496,22 @@ char SendDTMFSignal(byte dtmf_tone)
   SetCommLineStatus(CLS_FREE);
   return (ret_val);
 }
-byte IsUserButtonEnable(void) 
+
+int IsUserButtonEnable() 
 {
 	return (module_status & STATUS_USER_BUTTON_ENABLE);
 }
-void DisableUserButton(void) 
+
+void DisableUserButton() 
 {
 	module_status &= ~STATUS_USER_BUTTON_ENABLE;
 }
-void EnableUserButton(void) 
+
+void EnableUserButton() 
 {
 	module_status |= STATUS_USER_BUTTON_ENABLE;
 }
+
 /**********************************************************
 Method returns state of user button
 
@@ -2019,12 +1519,105 @@ Method returns state of user button
 return: 0 - not pushed = released
         1 - pushed
 **********************************************************/
-byte IsUserButtonPushed(void)
+int IsUserButtonPushed()
 {
-  byte ret_val = 0;
   if (CLS_FREE != GetCommLineStatus()) return(0);
   SetCommLineStatus(CLS_ATCMD);
+  return(0);
 }
+
+/**********************************************************
+Method picks up an incoming call
+
+return:
+**********************************************************/
+void PickUp()
+{
+  if (CLS_FREE != GetCommLineStatus()) return;
+  SetCommLineStatus(CLS_ATCMD);
+  serialPuts(gFD, "ATA");
+  SetCommLineStatus(CLS_FREE);
+}
+
+/**********************************************************
+Method hangs up incoming or active call
+
+return:
+**********************************************************/
+void HangUp()
+{
+  if (CLS_FREE != GetCommLineStatus()) return;
+  SetCommLineStatus(CLS_ATCMD);
+  serialPuts(gFD, "ATH");
+  SetCommLineStatus(CLS_FREE);
+}
+
+/**********************************************************
+Method checks status of call
+
+return:
+      CALL_NONE         - no call activity
+      CALL_INCOM_VOICE  - incoming voice
+      CALL_ACTIVE_VOICE - active voice
+      CALL_NO_RESPONSE  - no response to the AT command 
+      CALL_COMM_LINE_BUSY - comm line is not free
+**********************************************************/
+int CallStatus()
+{
+  int ret_val = CALL_NONE;
+
+  if (CLS_FREE != GetCommLineStatus()) return (CALL_COMM_LINE_BUSY);
+  SetCommLineStatus(CLS_ATCMD);
+  serialPuts(gFD, "AT+CPAS");
+
+  // 5 sec. for initial comm tmout
+  // 50 msec. for inter character timeout
+  if (RX_TMOUT_ERR == WaitResp(5000, 50)) 
+  {
+    // nothing was received (RX_TMOUT_ERR)
+    ret_val = CALL_NO_RESPONSE;
+  }
+  else
+  {
+    // something was received but what was received?
+    // ---------------------------------------------
+    // ready (device allows commands from TA/TE)
+    // <CR><LF>+CPAS: 0<CR><LF> <CR><LF>OK<CR><LF>
+    // unavailable (device does not allow commands from TA/TE)
+    // <CR><LF>+CPAS: 1<CR><LF> <CR><LF>OK<CR><LF> 
+    // unknown (device is not guaranteed to respond to instructions)
+    // <CR><LF>+CPAS: 2<CR><LF> <CR><LF>OK<CR><LF> - NO CALL
+    // ringing
+    // <CR><LF>+CPAS: 3<CR><LF> <CR><LF>OK<CR><LF> - NO CALL
+    // call in progress
+    // <CR><LF>+CPAS: 4<CR><LF> <CR><LF>OK<CR><LF> - NO CALL
+//    if(IsStringReceived("0"))
+//    {
+      // ready - there is no call
+      // ------------------------
+//      ret_val = CALL_NONE;
+	//printf("call phone number is 0\n");
+//    }
+    if(IsStringReceived("3"))
+    {
+      // incoming call
+      ret_val = CALL_INCOM_VOICE;
+    }
+    else if(IsStringReceived("4"))
+    {
+      // active call
+      ret_val = CALL_ACTIVE_VOICE;
+    }
+    else if(IsStringReceived("0"))
+    {
+      ret_val=CALL_NONE;
+    }
+  }
+
+  SetCommLineStatus(CLS_FREE);
+  return (ret_val);
+}
+
 /**********************************************************
 Method calls the specific number
 
@@ -2067,6 +1660,7 @@ void Call(int sim_position)
 
   SetCommLineStatus(CLS_FREE);
 }
+
 /**********************************************************
 Method checks status of call(incoming or active) 
 and makes authorization with specified SIM positions range
@@ -2095,13 +1689,12 @@ return:
       CALL_NO_RESPONSE            - no response to the AT command 
       CALL_COMM_LINE_BUSY         - comm line is not free
 **********************************************************/
-byte CallStatusWithAuth(char *phone_number,
-                             byte first_authorized_pos, byte last_authorized_pos)
+int CallStatusWithAuth(char *phone_number, int first_authorized_pos, int last_authorized_pos)
 {
-  byte ret_val = CALL_NONE;
-  byte search_phone_num = 0;
-  byte i;
-  byte status;
+  int ret_val = CALL_NONE;
+  int search_phone_num = 0;
+  int i;
+  int status;
   char *p_char; 
   char *p_char1;
 
@@ -2114,9 +1707,10 @@ byte CallStatusWithAuth(char *phone_number,
   // and max. 1500 msec. for inter character timeout
   RxInit(5000, 1500); 
   // wait response is finished
-  do {
+  do 
+  {
     if (IsStringReceived("OK\r\n")) 
-	{ 
+    { 
       // perfect - we have some response, but what:
 
       // there is either NO call:
@@ -2139,44 +1733,38 @@ byte CallStatusWithAuth(char *phone_number,
   {
     // something was received but what was received?
     // example: //+CLCC: 1,1,4,0,0,"+420XXXXXXXXX",145
-    // ---------------------------------------------
     if(IsStringReceived("+CLCC: 1,1,4,0,0")) 
-	{ 
+    { 
       // incoming VOICE call - not authorized so far
-      // -------------------------------------------
       search_phone_num = 1;
       ret_val = CALL_INCOM_VOICE_NOT_AUTH;
     }
     else if(IsStringReceived("+CLCC: 1,1,4,1,0")) 
-	{ 
+    { 
       // incoming DATA call - not authorized so far
-      // ------------------------------------------
       search_phone_num = 1;
       ret_val = CALL_INCOM_DATA_NOT_AUTH;
     }
     else if(IsStringReceived("+CLCC: 1,0,0,0,0")) 
-	{ 
+    { 
       // active VOICE call - GSM is caller
-      // ----------------------------------
       search_phone_num = 1;
       ret_val = CALL_ACTIVE_VOICE;
     }
     else if(IsStringReceived("+CLCC: 1,1,0,0,0"))
-	{ 
+    { 
       // active VOICE call - GSM is listener
-      // -----------------------------------
       search_phone_num = 1;
       ret_val = CALL_ACTIVE_VOICE;
     }
     else if(IsStringReceived("+CLCC: 1,1,0,1,0")) 
-	{ 
+    { 
       // active DATA call - GSM is listener
-      // ----------------------------------
       search_phone_num = 1;
       ret_val = CALL_ACTIVE_DATA;
     }
     else if(IsStringReceived("+CLCC:"))
-	{ 
+    { 
       // other string is not important for us - e.g. GSM module activate call
       // etc.
       // IMPORTANT - each +CLCC:xx response has also at the end
@@ -2184,50 +1772,43 @@ byte CallStatusWithAuth(char *phone_number,
       ret_val = CALL_OTHERS;
     }
     else if(IsStringReceived("OK"))
-	{ 
+    { 
       // only "OK" => there is NO call activity
-      // --------------------------------------
       ret_val = CALL_NONE;
     }
 
     
     // now we will search phone num string
     if (search_phone_num) 
-	{
+    {
       // extract phone number string
-      // ---------------------------
       p_char = strchr((char *)(comm_buf),'"');
       p_char1 = p_char+1; // we are on the first phone number character
       p_char = strchr((char *)(p_char1),'"');
       if (p_char != NULL) 
-	  {
+      {
         *p_char = 0; // end of string
         strcpy(phone_number, (char *)(p_char1));
       }
       
-      if ( (ret_val == CALL_INCOM_VOICE_NOT_AUTH) 
-           || (ret_val == CALL_INCOM_DATA_NOT_AUTH)) 
-		{
-
+      if ( (ret_val == CALL_INCOM_VOICE_NOT_AUTH) || (ret_val == CALL_INCOM_DATA_NOT_AUTH)) 
+      {
         if ((first_authorized_pos == 0) && (last_authorized_pos == 0)) 
-		{
+        {
           // authorization is not required => it means authorization is OK
-          // -------------------------------------------------------------
           if (ret_val == CALL_INCOM_VOICE_NOT_AUTH) ret_val = CALL_INCOM_VOICE_AUTH;
           else ret_val = CALL_INCOM_DATA_AUTH;
         }
         else
-		{
+        {
           // make authorization
-          // ------------------
           SetCommLineStatus(CLS_FREE);
           for (i = first_authorized_pos; i <= last_authorized_pos; i++)
-		  {
+          {
             if (ComparePhoneNumber(i, phone_number)) 
-			{
+            {
               // phone numbers are identical
               // authorization is OK
-              // ---------------------------
               if (ret_val == CALL_INCOM_VOICE_NOT_AUTH) ret_val = CALL_INCOM_VOICE_AUTH;
               else ret_val = CALL_INCOM_DATA_AUTH;
               break;  // and finish authorization
@@ -2236,12 +1817,10 @@ byte CallStatusWithAuth(char *phone_number,
         }
       }
     }
-    
   }
   else 
   {
     // nothing was received (RX_TMOUT_ERR)
-    // -----------------------------------
     ret_val = CALL_NO_RESPONSE;
   }
 

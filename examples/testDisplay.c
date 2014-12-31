@@ -36,7 +36,7 @@ int main()
   for (i=0; i<10; i++)
   {
     digitalWriteDisplay(i);
-    printf("AB=%d\n", i);
+    printf("AB = %d\n", i);
     delay(1000);
   }
   return(0);

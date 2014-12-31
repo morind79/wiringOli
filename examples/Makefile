@@ -1,7 +1,7 @@
 #
 # Makefile:
 #        wiringOli - Wiring Compatable library for the Olinuxino A20
-#        http://
+#        http://morind.free.fr
 #
 #        Copyright (c) 2013
 #################################################################################
@@ -35,7 +35,8 @@ LDLIBS    = -lwiringOli -lpthread -lm
 # Should not alter anything below this line
 ###############################################################################
 
-SRC        =        testPortA.c testPortB.c testPortC.c testPortD.c testDisplay.c testI2CLCD.c
+SRC        =        testPortA.c testPortB.c testPortC.c testPortD.c testDisplay.c testI2CLCD.c testRS232.c testGSM.c testGSM_SMS.c	\
+		testGSM_Call.c testGSM_ReceiveSMS.c
 
 OBJ        =        $(SRC:.c=.o)
 
@@ -71,6 +72,26 @@ testDisplay:        testDisplay.o
 testI2CLCD:        testI2CLCD.o
 	@echo [link]
 	@$(CC) -o $@ testI2CLCD.o $(LDFLAGS) $(LDLIBS)
+
+testRS232:        testRS232.o
+	@echo [link]
+	@$(CC) -o $@ testRS232.o $(LDFLAGS) $(LDLIBS)
+
+testGSM:        testGSM.o
+	@echo [link]
+	@$(CC) -o $@ testGSM.o $(LDFLAGS) $(LDLIBS)
+
+testGSM_SMS:        testGSM_SMS.o
+	@echo [link]
+	@$(CC) -o $@ testGSM_SMS.o $(LDFLAGS) $(LDLIBS)
+
+testGSM_Call:        testGSM_Call.o
+	@echo [link]
+	@$(CC) -o $@ testGSM_Call.o $(LDFLAGS) $(LDLIBS)
+
+testGSM_ReceiveSMS:        testGSM_ReceiveSMS.o
+	@echo [link]
+	@$(CC) -o $@ testGSM_ReceiveSMS.o $(LDFLAGS) $(LDLIBS)
 
 .c.o:
 	@echo [CC] $<

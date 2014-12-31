@@ -42,9 +42,9 @@ extern void digitalWritePortGeneral(int pin, int value);
 extern void digitalWriteDisplaySegment(int pin, int value);
 extern void digitalWriteDisplay(int value);
 extern void digitalWriteSIM900_ON(int value);
-extern int digitalReadSIM900_LED(int pin);
+extern int digitalReadSIM900_LED();
 extern void digitalWriteSIM900_RST(int value);
-extern int digitalReadSIM900_RI(int pin);
+extern int digitalReadSIM900_RI();
 
 #ifdef __cplusplus
 }

@@ -19,8 +19,8 @@ static int pinPortB[16] = {63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 7
 static int pinPortC[8] = {77, 78, 79, 80, 27, 28, 29, 30};  // PH24 to PH27 and PE0 to PE3
 static int pinPortD[8] = {31, 32, 33, 34, 35, 36, 37, 38};  // PE4 to PE11
 static int pinPortGeneral[2] = {18, 19}; // PI14 and PI15
-static int pinSIM900[4] = {21, 17, 20, 16}; // PC7, PI11, PC3, PI10
-static int pinDisplay[8] = {0, 1, 2, 3, 4, 5, 6, 7}; // PG0 to PG7
+static int pinSIM900[4] = {20, 21, 17, 22}; // PC3 = RST, PC7 = LED, PI11 = RI, PC16 = ON/OFF
+static int pinDisplay[8] = {0, 1, 2, 3, 4, 5, 12, 13}; // PG0 to PG5, PI0 and PI1
 
 /*
  * pinOliPortA :
@@ -434,7 +434,7 @@ void digitalWriteDisplay(int value)
  */
 void digitalWriteSIM900_ON(int value)
 {
-  digitalWrite(pinSIM900[0], value);
+  digitalWrite(pinSIM900[3], value);
 }
 
 /*
@@ -442,7 +442,7 @@ void digitalWriteSIM900_ON(int value)
  *	Read LED value of SIM900 module, returning HIGH or LOW
  *********************************************************************************
  */
-int digitalReadSIM900_LED(int pin)
+int digitalReadSIM900_LED()
 {
   return(digitalRead(pinSIM900[1]));
 }
@@ -454,7 +454,7 @@ int digitalReadSIM900_LED(int pin)
  */
 void digitalWriteSIM900_RST(int value)
 {
-  digitalWrite(pinSIM900[2], value);
+  digitalWrite(pinSIM900[0], value);
 }
 
 /*
@@ -462,9 +462,9 @@ void digitalWriteSIM900_RST(int value)
  *	Read RI value of SIM900 module, returning HIGH or LOW
  *********************************************************************************
  */
-int digitalReadSIM900_RI(int pin)
+int digitalReadSIM900_RI()
 {
-  return(digitalRead(pinSIM900[3]));
+  return(digitalRead(pinSIM900[2]));
 }
 
 /*
@@ -504,7 +504,7 @@ void oliExtSetup(void)
   // SIM900 (4 bit) -> Input and Output
   pinMode(pinSIM900[0], OUTPUT);
   pinMode(pinSIM900[1], INPUT);
-  pinMode(pinSIM900[2], OUTPUT);
-  pinMode(pinSIM900[3], INPUT);
+  pinMode(pinSIM900[2], INPUT);
+  pinMode(pinSIM900[3], OUTPUT);
 
 }

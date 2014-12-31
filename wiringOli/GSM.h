@@ -10,55 +10,87 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include "wiringOli.h"
-
-#define byte 	unsigned char
-#define word 	unsigned int
-
-#define GSM_LIB_VERSION 	100
-
-#define DTMF_DATA_VALID     14 // connect DTMF Data Valid to pin 14
-#define DTMF_DATA0          72 // connect DTMF Data0 to pin 72
-#define DTMF_DATA1          73 // connect DTMF Data1 to pin 73
-#define DTMF_DATA2          74 // connect DTMF Data2 to pin 74
-#define DTMF_DATA3          75 // connect DTMF Data3 to pin 75
-
-// length for the internal communication buffer
+// Length for the internal communication buffer
 #define COMM_BUF_LEN        300
 
-// some constants for the IsRxFinished() method
+// Some constants for the IsRxFinished() method
 #define RX_NOT_STARTED      0
 #define RX_ALREADY_STARTED  1
 
-// some constants for the InitParam() method
+// Some constants for the InitParam() method
 #define PARAM_SET_0   0
 #define PARAM_SET_1   1
 
-// DTMF signal is NOT valid
-//#define DTMF_NOT_VALID      0x10
-
-// status bits definition
+// Status bits definition
 #define STATUS_NONE                 0
 #define STATUS_INITIALIZED          1
 #define STATUS_REGISTERED           2
 #define STATUS_USER_BUTTON_ENABLE   4
 
-enum sms_type_enum
-{
-	SMS_UNREAD,
-	SMS_READ,
-	SMS_ALL,
+// Communication SIM900
+int module_status;
+int comm_line_status;
+void Echo(int state);
+char SendATCmdWaitResp(char *AT_cmd_string, uint16_t start_comm_tmout, uint16_t max_interchar_tmout, char const *response_string, int no_of_attempts);
+int WaitResp(uint16_t start_comm_tmout, uint16_t max_interchar_tmout);
+int WaitRespAdd(uint16_t start_comm_tmout, uint16_t max_interchar_tmout, char const *expected_resp_string);
+void RxInit(uint16_t start_comm_tmout, uint16_t max_interchar_tmout);
+int IsRxFinished(void);
+int IsStringReceived(char const *compare_string);
 
-	SMS_LAST_ITEM
-};
+// Serial port
+void serialBegin(long baud);
+void serialEnd();
+long checkBaud();
 
-enum comm_line_status_enum
+// Others
+char *ChangeIToS(int IntNU);
+
+// Power
+void powerOn();
+void reset();
+int isOn();
+
+// GSM
+void init();
+void InitParam(int group);
+char InitSMSMemory();
+char SendSMS(char *number_str, char *message_str);
+char SendSMSSpecified(int sim_phonebook_position, char *message_str);
+char IsSMSPresent(int required_status);
+char GetSMS(int position, char *phone_number, char *SMS_text, int max_SMS_len);
+char GetAuthorizedSMS(int position, char *phone_number, char *SMS_text, int max_SMS_len, int first_authorized_pos, int last_authorized_pos);
+char DeleteSMS(int position);
+char GetPhoneNumber(int position, char *phone_number);
+char WritePhoneNumber(int position, char *phone_number);
+char DelPhoneNumber(int position);
+char ComparePhoneNumber(int position, char *phone_number);
+
+char SetSpeakerVolume(int speaker_volume);
+char IncSpeakerVolume();
+char DecSpeakerVolume();
+
+char SendDTMFSignal(int dtmf_tone);
+
+int IsUserButtonEnable();
+void DisableUserButton();
+void EnableUserButton();
+int IsUserButtonPushed();
+
+void PickUp();
+void HangUp();
+int CallStatus();
+void CallS(char *number_string);
+void Call(int sim_position);
+int CallStatusWithAuth(char *phone_number, int first_authorized_pos, int last_authorized_pos);
+
+enum at_resp_enum
 {
-	// CLS like CommunicationLineStatus
-	CLS_FREE,   // line is free - not used by the communication and can be used
-	CLS_ATCMD,  // line is used by AT commands, includes also time for response
-	CLS_DATA,   // for the future - line is used in the CSD or GPRS communication
-	CLS_LAST_ITEM
+	AT_RESP_ERR_NO_RESP = -1,   // Nothing received
+	AT_RESP_ERR_DIF_RESP = 0,   // Response_string is different from the response
+	AT_RESP_OK = 1,             // Response_string was included in the response
+
+	AT_RESP_LAST_ITEM
 };
 
 enum rx_state_enum
@@ -72,23 +104,32 @@ enum rx_state_enum
 	RX_LAST_ITEM
 };
 
-enum at_resp_enum
+enum comm_line_status_enum
 {
-	AT_RESP_ERR_NO_RESP = -1,   // nothing received
-	AT_RESP_ERR_DIF_RESP = 0,   // response_string is different from the response
-	AT_RESP_OK = 1,             // response_string was included in the response
-
-	AT_RESP_LAST_ITEM
+	// CLS like CommunicationLineStatus
+	CLS_FREE,   // line is free - not used by the communication and can be used
+	CLS_ATCMD,  // line is used by AT commands, includes also time for response
+	CLS_DATA,   // for the future - line is used in the CSD or GPRS communication
+	CLS_LAST_ITEM
 };
 
-enum registration_ret_val_enum
+enum sms_type_enum
 {
-	REG_NOT_REGISTERED = 0,
-	REG_REGISTERED,
-	REG_NO_RESPONSE,
-	REG_COMM_LINE_BUSY,
+	SMS_UNREAD,
+	SMS_READ,
+	SMS_ALL,
+	SMS_LAST_ITEM
+};
 
-	REG_LAST_ITEM
+enum getsms_ret_val_enum
+{
+	GETSMS_NO_SMS   = 0,
+	GETSMS_UNREAD_SMS,
+	GETSMS_READ_SMS,
+	GETSMS_OTHER_SMS,
+	GETSMS_NOT_AUTH_SMS,
+	GETSMS_AUTH_SMS,
+	GETSMS_LAST_ITEM
 };
 
 enum call_ret_val_enum
@@ -104,94 +145,5 @@ enum call_ret_val_enum
 	CALL_OTHERS,
 	CALL_NO_RESPONSE,
 	CALL_COMM_LINE_BUSY,
-
 	CALL_LAST_ITEM
 };
-
-enum getsms_ret_val_enum
-{
-	GETSMS_NO_SMS   = 0,
-	GETSMS_UNREAD_SMS,
-	GETSMS_READ_SMS,
-	GETSMS_OTHER_SMS,
-
-	GETSMS_NOT_AUTH_SMS,
-	GETSMS_AUTH_SMS,
-
-	GETSMS_LAST_ITEM
-};
-
-byte module_status;
-byte comm_line_status;
-
-// set comm. line status
-void SetCommLineStatus(byte new_status);
-// get comm. line status
-byte GetCommLineStatus(void);
-
-// picks up an incoming call
-void PickUp(void);
-// hangs up an incomming call
-void HangUp(void);
-byte CallStatus(void);
-
-void DebugPrint(const char *string_to_print, byte last_debug_print);
-void DebugPrintD(int number_to_print, byte last_debug_print);
-
-void TurnOn(long baud_rate);
-void InitParam(byte group);
-char InitSMSMemory(void); 
-// routines regarding communication with the GSM module
-void RxInit(uint16_t start_comm_tmout, uint16_t max_interchar_tmout);
-byte IsRxFinished(void);
-byte IsStringReceived(char const *compare_string);
-byte WaitResp(uint16_t start_comm_tmout, uint16_t max_interchar_tmout);
-byte WaitRespAdd(uint16_t start_comm_tmout, uint16_t max_interchar_tmout,char const *expected_resp_string);
-char SendATCmdWaitResp(char *AT_cmd_string,
-						uint16_t start_comm_tmout, uint16_t max_interchar_tmout,
-						char const *response_string,
-						byte no_of_attempts);
-
-//int millis(void);
-void Echo(byte state);
-char *ChangeIToS	  (int IntNU);
-
-void  serialBegin     (int baud);
-//void  delay			  (int a);
-int LibVer(void);
-byte CheckRegistration(void);
-byte IsRegistered(void);
-byte IsInitialized(void);
-
-// SMS's methods
-char SendSMS(char *number_str, char *message_str);
-char SendSMSSpecified(byte sim_phonebook_position, char *message_str);
-char IsSMSPresent(byte required_status);
-char GetSMS(byte position, char *phone_number, char *SMS_text, byte max_SMS_len);
-char GetAuthorizedSMS(	byte position, char *phone_number, char *SMS_text, byte max_SMS_len,
-						byte first_authorized_pos, byte last_authorized_pos);
-char DeleteSMS(byte position);
-
-// Phonebook's methods	sim
-char GetPhoneNumber(byte position, char *phone_number);
-char WritePhoneNumber(byte position, char *phone_number);
-char DelPhoneNumber(byte position);
-char ComparePhoneNumber(byte position, char *phone_number);
-
-// Speaker volume methods - set, increase, decrease
-char SetSpeakerVolume(byte speaker_volume);
-char IncSpeakerVolume(void);
-char DecSpeakerVolume(void);
-
-// sends DTMF signal
-char SendDTMFSignal(byte dtmf_tone);
-
-// User button methods
-byte IsUserButtonEnable(void);
-void DisableUserButton(void);
-void EnableUserButton(void);
-byte IsUserButtonPushed(void);
-
-void CallS(char *number_string);
-void Call(int sim_position);
-byte CallStatusWithAuth(char *phone_number,	byte first_authorized_pos, byte last_authorized_pos);

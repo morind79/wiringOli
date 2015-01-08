@@ -1,0 +1,44 @@
+Components used in OliExt V4
+
+Farnell ref.        Description                 Value     Designator
+1825329	            AP1512A-50K5L-13	          5V 3A     VR1
+1858600	            B360A-13-F                  3A        D2, D3
+9138625             8510-4500PL                           P13, P14
+1607890             TXB0104D                              U4, U5, U6, U7, U8, U9, U11, U12, U15, U16, U18, U21, U22, U23
+1607892             TXS0104ED                             U19
+2320898             MC1206N470J500CT            47pF      C9, C10, C11, C12, C13, C14, C33
+2320891             MC1206N220J500CT            22pF      C34, C35
+9138676             8540-4500PL                           P10, P11, P12
+9336079             MC0125W1206118K             18k       R13
+1605565             MCP2515-E/SO                          U3
+1470457             MAX3232CD                             U17, U24
+1470013             CRCW12064K70FKEA            4.7k      R9, R14
+1759361             MC1206B104K500CT            100nF     C5, C6, C7, C8, C36, C37, C38, C39, C40
+1759333             MC1206B561K500CT            560pF     C31, C32
+2008395             CR1206-FX-1002ELF           10k       R5, R6, R7, R8, R12, R15, R16, R21, R22
+2057813             ERJ8GEYJ101V                100       R10, R11
+1608727             RAPC722X                              PJ1
+1902981             MCGLR25V477M10X16           470uF     C4, C42
+1842216             9B-16.000MAAJ-B             16MHz     Y1
+1216980             Lumberg 1503                Jack 3.5  SPK, MIC
+2146429             KINGBRIGHT SC52-11LGWA                DS1
+2101306             PCA9517D                              U13
+1103952             FCI 75869-104LF             HE10      P1, P2
+1327711             12062C103KAT2A              10nF      C1, C3, C16, C17, C18, C19, C20, C21, C22, C23, C24, C25, C26, C27, C28, C29, C30, C43
+2435165             SD04H0SB                              SW1
+2401260             AMPHENOL L717TSEH09POL2RM8    	      J6, J7
+1642019             WURTH 61201021621                     P3, P4, P7, P16
+9692673             PANASONIC EECS0HD104H	      0.1F      C15
+2401143             AMPHENOL L177HDE15SOL2RM23            J5
+2100293             MIC29302WU                            VR3
+2139559             CRCW120643K0FKEA            43k       R24
+2219242             LQH32PN1R0NNCL                        I2
+2308330             NXP LD6836TD/28P                      VR2
+2333542             CR1206-FX-1003ELF           100k      R23
+1236655             MCNP16V105M5X11             1uF       C41
+1439745             MCP2551-E/P                           U2
+1864284             MULTICOMP MCBF7330-470MU              I1
+9336354             MC0125W12061330R            330       R25
+9336168             MC0125W120612K2             2.2k      R1, R2, R3, R4, R17, R18, R19, R20
+1508499             MOLEX 70543-0108                      I2C1, I2C2
+https://store.open-electronics.org/index.php?_route_=Small%20Breakout%20for%20SIM900%20GSM%20Module               

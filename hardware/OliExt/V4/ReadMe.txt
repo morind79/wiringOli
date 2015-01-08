@@ -1,3 +1,5 @@
+Please have a look at picture for A20 board modification otherwise you cannot power the board.
+
 Upgrade of OliExt V3
 
 1 - Pin PI14 used in General and CAN so changed this, now PI14 is for General and PI10 for CAN

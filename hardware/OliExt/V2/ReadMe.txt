@@ -1,3 +1,5 @@
+Please have a look at picture for A20 board modification otherwise you cannot power the board.
+
 Upgrade of OliExt V1
 
 1 - Fix RX/TX on U17

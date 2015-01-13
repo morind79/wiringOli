@@ -72,7 +72,7 @@ void Echo(int state)
 	  }
 	  //serialPuts(gFD, (int)state);    
 	  serialPuts(gFD, "\r");
-	  delay(500);
+	  delay(400);
 	  SetCommLineStatus(CLS_FREE);
 	}
 }
@@ -170,7 +170,6 @@ int WaitRespAdd(uint16_t start_comm_tmout, uint16_t max_interchar_tmout, char co
   {
     status = IsRxFinished();
   } while (status == RX_NOT_FINISHED);
-
 	if (status == RX_FINISHED)
 	{
 	  // Something was received but what was received?
@@ -192,11 +191,10 @@ int WaitRespAdd(uint16_t start_comm_tmout, uint16_t max_interchar_tmout, char co
 /**********************************************************
 Initializes receiving process
 
-start_comm_tmout    - maximum waiting time for receiving the first response
-character (in msec.)
+start_comm_tmout    - maximum waiting time for receiving the first response character (in ms)
 max_interchar_tmout - maximum tmout between incoming characters in ms
 if there is no other incoming character longer then specified
-tmout(in msec) receiving process is considered as finished
+tmout(in ms) receiving process is considered as finished
 **********************************************************/
 void RxInit(uint16_t start_comm_tmout, uint16_t max_interchar_tmout)
 {
@@ -277,7 +275,7 @@ Method checks received bytes
 compare_string - pointer to the string which should be find
 
 return: 0 - string was NOT received
-1 - string was received
+        1 - string was received
 **********************************************************/
 int IsStringReceived(char const *compare_string)
 {
@@ -287,7 +285,6 @@ int IsStringReceived(char const *compare_string)
 	if(comm_buf_len)
 	{
 	  ch = strstr((char *)comm_buf, compare_string);
-
 		if (ch != NULL)
 		{
 			ret_val = 1;
@@ -347,7 +344,7 @@ long checkBaud()
 			serialPuts(gFD, "AT+IPR=");
 			serialPuts(gFD, ChangeIToS(baud));
 			serialPuts(gFD, "\r"); // Send <CR>
-			delay(500);
+			delay(400);
       if (AT_RESP_OK == SendATCmdWaitResp("AT", 500, 100, "OK", 5))
 			{
 				return(baud);
@@ -360,7 +357,7 @@ long checkBaud()
 // Others **********************************************************************
 char *ChangeIToS(int IntNU)
 {
-	char *String = (char*)malloc(80);
+  char *String = (char*)malloc(80);
 	sprintf(String, "%d", IntNU);
 	return(String);
 }
@@ -421,7 +418,8 @@ void InitParam(int group)
       // Check comm line
       if (CLS_FREE != GetCommLineStatus()) return;
       SetCommLineStatus(CLS_ATCMD);
-
+      // Must wait a little bit
+      delay(400);
       // Reset to the factory settings
       SendATCmdWaitResp("AT&F", 1000, 50, "OK", 5);
       // switch off echo
@@ -445,7 +443,8 @@ void InitParam(int group)
       // Check comm line
       if (CLS_FREE != GetCommLineStatus()) return;
       SetCommLineStatus(CLS_ATCMD);
-
+      // Must wait a little bit
+      delay(400);
       // Request calling line identification
       SendATCmdWaitResp("AT+CLIP=1", 500, 50, "OK", 5);
       // Mobile Equipment Error Code
@@ -503,6 +502,8 @@ char InitSMSMemory()
 
   if (CLS_FREE != GetCommLineStatus()) return (ret_val);
   SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);
   ret_val = 0; // not initialized yet
 
   // Disable messages about new SMS from the GSM module 
@@ -552,7 +553,9 @@ char SendSMS(char *number_str, char *message_str)
   int i;
 
   if (CLS_FREE != GetCommLineStatus()) return (ret_val);
-  SetCommLineStatus(CLS_ATCMD);  
+  SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);  
   ret_val = 0; // Still not send
   // Try to send SMS 3 times in case there is some problem
   for (i = 0; i < 3; i++) 
@@ -561,12 +564,14 @@ char SendSMS(char *number_str, char *message_str)
     serialPuts(gFD, "AT+CMGS=\"");
     serialPuts(gFD, number_str);
     serialPuts(gFD, "\"\r");
+    delay(400);
     // 1000 msec. for initial comm tmout
     // 50 msec. for inter character timeout
     if (RX_FINISHED_STR_RECV == WaitRespAdd(1000, 50, ">")) 
 	  {
       // Send SMS text
       serialPuts(gFD, message_str);
+      delay(400);
       // Ctrl-Z
       bytesToSend = 26;
       serialPutchar(gFD, bytesToSend);
@@ -674,11 +679,11 @@ char IsSMSPresent(int required_status)
   char ret_val = -1;
   char *p_char;
   int status;
-
   if (CLS_FREE != GetCommLineStatus()) return (ret_val);
   SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);
   ret_val = 0; // Still not present
-
   switch (required_status) 
   {
     case SMS_UNREAD:
@@ -691,14 +696,13 @@ char IsSMSPresent(int required_status)
       serialPuts(gFD, "AT+CMGL=\"ALL\"\r");
       break;
   }
-
   // 5s for initial comm tmout and max. 1500ms for inter character timeout
-  RxInit(5000, 1500); 
+  RxInit(5000, 1500);
   // Wait response is finished
   do 
   {
     if (IsStringReceived("OK"))
-    { 
+    {
       // perfect - we have some response, but what:
 
       // there is either NO SMS:
@@ -708,12 +712,10 @@ char IsSMSPresent(int required_status)
       // +CMGL: <index>,<stat>,<oa/da>,,[,<tooa/toda>,<length>]
       // <CR><LF> <data> <CR><LF>OK<CR><LF>
       status = RX_FINISHED;
-      break; // so finish receiving immediately and let's go to 
-             // to check response 
+      break; // so finish receiving immediately and let's go to check response 
     }
     status = IsRxFinished();
   } while (status == RX_NOT_FINISHED);
-
   switch (status) 
   {
     case RX_TMOUT_ERR:
@@ -723,12 +725,12 @@ char IsSMSPresent(int required_status)
     case RX_FINISHED:
       // Something was received but what was received?
       if(IsStringReceived("+CMGL:"))
-      { 
+      {
         // There is some SMS with status => get its position
         // response is:
         // +CMGL: <index>,<stat>,<oa/da>,,[,<tooa/toda>,<length>]
         // <CR><LF> <data> <CR><LF>OK<CR><LF>
-        p_char = strchr((char *)comm_buf,':');
+        p_char = strchr((char *)comm_buf, ':');
         if (p_char != NULL) 
         {
           ret_val = atoi(p_char+1);
@@ -797,21 +799,25 @@ char GetSMS(int position, char *phone_number, char *SMS_text, int max_SMS_len)
   char *p_char; 
   char *p_char1;
   int len;
-
-  if (position == 0) return (-3);
+  int status;
+  
+  if (position == 0) return(-3);
   if (CLS_FREE != GetCommLineStatus()) return (ret_val);
   SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);
   phone_number[0] = 0;  // end of string for now
   ret_val = GETSMS_NO_SMS; // still no SMS
-  
   //send "AT+CMGR=X" - where X = position
   serialPuts(gFD, "AT+CMGR=");
-  serialPuts(gFD, ChangeIToS(position));  
+  serialPuts(gFD, ChangeIToS(position));
   serialPuts(gFD, "\r");
-
+  // Must wait a little bit
+  delay(400);
   // 5000 msec. for initial comm tmout
   // 100 msec. for inter character tmout
-  switch (WaitRespAdd(5000, 100, "+CMGR")) 
+  status = WaitRespAdd(5000, 100, "+CMGR:");
+  switch (status) 
   {
     case RX_TMOUT_ERR:
       // response was not received in specific time
@@ -859,9 +865,9 @@ char GetSMS(int position, char *phone_number, char *SMS_text, int max_SMS_len)
       }
 
       // extract phone number string
-      p_char = strchr((char *)(comm_buf),',');
+      p_char = strchr((char *)(comm_buf), ',');
       p_char1 = p_char+2; // we are on the first phone number character
-      p_char = strchr((char *)(p_char1),'"');
+      p_char = strchr((char *)(p_char1), '"');
       if (p_char != NULL) 
       {
         *p_char = 0; // end of string
@@ -1051,13 +1057,65 @@ char DeleteSMS(int position)
   if (position == 0) return (-3);
   if (CLS_FREE != GetCommLineStatus()) return (ret_val);
   SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);
   ret_val = 0; // not deleted yet
   
   //send "AT+CMGD=XY" - where XY = position
   serialPuts(gFD, "AT+CMGD=");
   serialPuts(gFD, ChangeIToS((int)position));  
   serialPuts(gFD, "\r");
+  delay(400);
+  // 5000 msec. for initial comm tmout
+  // 20 msec. for inter character timeout
+  switch (WaitRespAdd(5000, 50, "OK")) 
+  {
+    case RX_TMOUT_ERR:
+      // response was not received in specific time
+      ret_val = -2;
+      break;
+    case RX_FINISHED_STR_RECV:
+      // OK was received => SMS deleted
+      ret_val = 1;
+      break;
+    case RX_FINISHED_STR_NOT_RECV:
+      // other response: e.g. ERROR => SMS was not deleted
+      ret_val = 0; 
+      break;
+  }
 
+  SetCommLineStatus(CLS_FREE);
+  return (ret_val);
+}
+
+/**********************************************************
+Method delete all SMS
+
+return: 
+        ERROR ret. val:
+        ---------------
+        -1 - comm. line to the GSM module is not free
+        -2 - GSM module didn't answer in timeout
+        -3 - position must be > 0
+
+        OK ret val:
+        -----------
+        0 - SMS was not deleted
+        1 - SMS was deleted
+**********************************************************/
+char DeleteAllSMS() 
+{
+  char ret_val = -1;
+
+  if (CLS_FREE != GetCommLineStatus()) return (ret_val);
+  SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);
+  ret_val = 0; // not deleted yet
+  
+  //send "AT+CMGD=1,4" - where XY = position
+  serialPuts(gFD, "AT+CMGD=1,4\r");
+  delay(400);
   // 5000 msec. for initial comm tmout
   // 20 msec. for inter character timeout
   switch (WaitRespAdd(5000, 50, "OK")) 
@@ -1130,6 +1188,8 @@ char GetPhoneNumber(int position, char *phone_number)
   if (position == 0) return (-3);
   if (CLS_FREE != GetCommLineStatus()) return (ret_val);
   SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);
   ret_val = 0; // not found yet
   phone_number[0] = 0; // phone number not found yet => empty string
   
@@ -1137,7 +1197,7 @@ char GetPhoneNumber(int position, char *phone_number)
   serialPuts(gFD, "AT+CPBR=");
   serialPuts(gFD, ChangeIToS((int)position));  
   serialPuts(gFD, "\r");
-
+  delay(400);
   // 5000 msec. for initial comm tmout
   // 50 msec. for inter character timeout
   switch (WaitRespAdd(5000, 50, "+CPBR")) 
@@ -1204,6 +1264,8 @@ char WritePhoneNumber(int position, char *phone_number)
   if (position == 0) return (-3);
   if (CLS_FREE != GetCommLineStatus()) return (ret_val);
   SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);
   ret_val = 0; // phone number was not written yet
   
   //send: AT+CPBW=XY,"00420123456789"
@@ -1214,7 +1276,7 @@ char WritePhoneNumber(int position, char *phone_number)
   serialPuts(gFD, ",\"");
   serialPuts(gFD, phone_number);
   serialPuts(gFD, "\"\r");
-
+  delay(400);
   // 5000 msec. for initial comm tmout
   // 50 msec. for inter character timeout
   switch (WaitRespAdd(5000, 50, "OK")) 
@@ -1259,6 +1321,8 @@ char DelPhoneNumber(int position)
   if (position == 0) return (-3);
   if (CLS_FREE != GetCommLineStatus()) return (ret_val);
   SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);
   ret_val = 0; // phone number was not written yet
   
   //send: AT+CPBW=XY
@@ -1266,7 +1330,7 @@ char DelPhoneNumber(int position)
   serialPuts(gFD, "AT+CPBW=");
   serialPuts(gFD, ChangeIToS((int)position));  
   serialPuts(gFD, "\r");
-
+  delay(400);
   // 5000 msec. for initial comm tmout
   // 50 msec. for inter character timeout
   switch (WaitRespAdd(5000, 50, "OK"))
@@ -1364,6 +1428,8 @@ char SetSpeakerVolume(int speaker_volume)
 
   if (CLS_FREE != GetCommLineStatus()) return (ret_val);
   SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);
   // remember set value as last value
   if (speaker_volume > 14) speaker_volume = 14;
   // select speaker volume (0 to 14)
@@ -1474,6 +1540,8 @@ char SendDTMFSignal(int dtmf_tone)
 
   if (CLS_FREE != GetCommLineStatus()) return (ret_val);
   SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);
   // e.g. AT+VTS=5<CR>
   serialPuts(gFD, "AT+VTS=");
   serialPuts(gFD, ChangeIToS((int)dtmf_tone));    
@@ -1523,6 +1591,8 @@ int IsUserButtonPushed()
 {
   if (CLS_FREE != GetCommLineStatus()) return(0);
   SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);
   return(0);
 }
 
@@ -1535,6 +1605,8 @@ void PickUp()
 {
   if (CLS_FREE != GetCommLineStatus()) return;
   SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);
   serialPuts(gFD, "ATA");
   SetCommLineStatus(CLS_FREE);
 }
@@ -1548,6 +1620,8 @@ void HangUp()
 {
   if (CLS_FREE != GetCommLineStatus()) return;
   SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);
   serialPuts(gFD, "ATH");
   SetCommLineStatus(CLS_FREE);
 }
@@ -1568,6 +1642,8 @@ int CallStatus()
 
   if (CLS_FREE != GetCommLineStatus()) return (CALL_COMM_LINE_BUSY);
   SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);
   serialPuts(gFD, "AT+CPAS");
 
   // 5 sec. for initial comm tmout
@@ -1629,6 +1705,8 @@ void CallS(char *number_string)
 {
   if (CLS_FREE != GetCommLineStatus()) return;
   SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);
   // ATDxxxxxx;<CR>
   serialPuts(gFD, "ATD");
   serialPuts(gFD, number_string);    
@@ -1649,6 +1727,8 @@ void Call(int sim_position)
 {
   if (CLS_FREE != GetCommLineStatus()) return;
   SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);
   // ATD>"SM" 1;<CR>
   serialPuts(gFD, "ATD>\"SM\" ");
   serialPuts(gFD, ChangeIToS(sim_position));    
@@ -1701,6 +1781,8 @@ int CallStatusWithAuth(char *phone_number, int first_authorized_pos, int last_au
   phone_number[0] = 0x00;  // no phonr number so far
   if (CLS_FREE != GetCommLineStatus()) return (CALL_COMM_LINE_BUSY);
   SetCommLineStatus(CLS_ATCMD);
+  // Must wait a little bit
+  delay(400);
   serialPuts(gFD, "AT+CLCC");
 
   // 5 sec. for initial comm tmout

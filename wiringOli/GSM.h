@@ -61,6 +61,7 @@ char IsSMSPresent(int required_status);
 char GetSMS(int position, char *phone_number, char *SMS_text, int max_SMS_len);
 char GetAuthorizedSMS(int position, char *phone_number, char *SMS_text, int max_SMS_len, int first_authorized_pos, int last_authorized_pos);
 char DeleteSMS(int position);
+char DeleteAllSMS();
 char GetPhoneNumber(int position, char *phone_number);
 char WritePhoneNumber(int position, char *phone_number);
 char DelPhoneNumber(int position);

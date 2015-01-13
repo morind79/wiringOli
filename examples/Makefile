@@ -35,7 +35,7 @@ LDLIBS    = -lwiringOli -lpthread -lm
 # Should not alter anything below this line
 ###############################################################################
 
-SRC        =        testPortA.c testPortB.c testPortC.c testPortD.c testDisplay.c testI2CLCD.c testRS232.c testGSM.c testGSM_SMS.c	\
+SRC        =        testPortA.c testPortB.c testPortC.c testPortD.c testDisplay.c testI2CLCD.c testRS232.c testGSM.c testGSM_SendSMS.c	\
 		testGSM_Call.c testGSM_ReceiveSMS.c
 
 OBJ        =        $(SRC:.c=.o)
@@ -81,9 +81,9 @@ testGSM:        testGSM.o
 	@echo [link]
 	@$(CC) -o $@ testGSM.o $(LDFLAGS) $(LDLIBS)
 
-testGSM_SMS:        testGSM_SMS.o
+testGSM_SendSMS:        testGSM_SendSMS.o
 	@echo [link]
-	@$(CC) -o $@ testGSM_SMS.o $(LDFLAGS) $(LDLIBS)
+	@$(CC) -o $@ testGSM_SendSMS.o $(LDFLAGS) $(LDLIBS)
 
 testGSM_Call:        testGSM_Call.o
 	@echo [link]

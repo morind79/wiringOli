@@ -173,7 +173,7 @@ void serialPutchar(int fd, unsigned char c)
 
 void serialPuts(int fd, char *s)
 {
-  write(fd, s, strlen (s));
+  write(fd, s, strlen(s));
 }
 
 /*

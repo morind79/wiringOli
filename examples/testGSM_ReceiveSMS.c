@@ -5,6 +5,7 @@
 
 OLI_THREAD(ri)
 {
+  int i;
   int pos = 0;
   char number[20];
   char text[180];
@@ -18,16 +19,23 @@ OLI_THREAD(ri)
     // Check if RI status changed
     if (digitalReadSIM900_RI() == 0)
     {
+      printf("RI detected...\n");
+      delay(200); 
       // Something happened
-      pos = (int)IsSMSPresent(SMS_UNREAD);
-      printf("Position = %d\n", pos); 
-      if ((pos > 0) && (pos <= 20))
+      for (i = 0; i < 4; i++)
       {
-        text[0]='\0';
+        pos = (int)IsSMSPresent(SMS_UNREAD);
+        if ((pos >0) && (pos <=40)) break;
+        delay(2000);
+      }
+      
+      printf("Position = %d\n", pos); 
+      if ((pos > 0) && (pos <= 40))
+      {
         GetSMS(pos, number, text, 180);
         printf("SMS : %s, from %s\n", text, number);
         DeleteSMS(pos);      
-      }     
+      }
     }
     delay(100);
   }

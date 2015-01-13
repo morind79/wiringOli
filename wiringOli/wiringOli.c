@@ -203,15 +203,15 @@ void delayMicroseconds (unsigned int howLong)
  *********************************************************************************
  */
 
-unsigned int millis (void)
+unsigned int millis(void)
 {
-  struct timeval tv ;
-  uint64_t now ;
+  struct timeval tv;
+  uint64_t now;
 
-  gettimeofday (&tv, NULL) ;
-  now  = (uint64_t)tv.tv_sec * (uint64_t)1000 + (uint64_t)(tv.tv_usec / 1000) ;
+  gettimeofday(&tv, NULL);
+  now  = (uint64_t)tv.tv_sec * (uint64_t)1000 + (uint64_t)(tv.tv_usec / 1000);
 
-  return (uint32_t)(now - epochMilli) ;
+  return (uint32_t)(now - epochMilli);
 }
 
 

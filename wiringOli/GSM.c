@@ -687,13 +687,13 @@ char IsSMSPresent(int required_status)
   switch (required_status) 
   {
     case SMS_UNREAD:
-      serialPuts(gFD, "AT+CMGL=\"REC UNREAD\"\r");
+      serialPuts(gFD, "AT+CMGL=\"REC UNREAD\",1\r");
       break;
     case SMS_READ:
-      serialPuts(gFD, "AT+CMGL=\"REC READ\"\r");
+      serialPuts(gFD, "AT+CMGL=\"REC READ\",1\r");
       break;
     case SMS_ALL:
-      serialPuts(gFD, "AT+CMGL=\"ALL\"\r");
+      serialPuts(gFD, "AT+CMGL=\"ALL\",1\r");
       break;
   }
   // 5s for initial comm tmout and max. 1500ms for inter character timeout

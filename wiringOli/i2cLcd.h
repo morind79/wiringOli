@@ -30,14 +30,14 @@ extern "C" {
 
 typedef struct LCD
 {
-    unsigned char devAddr;            // Device address
-    int fd;                           // File descriptor of I2C stream
-    unsigned char dispalyFunction;    // Display function configuration data
-    unsigned char displayControl;     // Display control configuration data
-    unsigned char displayMode;        // Display mode configuration data
-    unsigned char numCols;            // Characters one line can display
-    unsigned char numRows;            // Lines LCD can display
-    unsigned char backLightEn;        // LCD back light configuration data
+  unsigned char devAddr;            // Device address
+  int fd;                           // File descriptor of I2C stream
+  unsigned char dispalyFunction;    // Display function configuration data
+  unsigned char displayControl;     // Display control configuration data
+  unsigned char displayMode;        // Display mode configuration data
+  unsigned char numCols;            // Characters one line can display
+  unsigned char numRows;            // Lines LCD can display
+  unsigned char backLightEn;        // LCD back light configuration data
 }LCDConf;
 
 #define CLEARDISPLAY   0x01

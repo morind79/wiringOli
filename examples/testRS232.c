@@ -33,8 +33,9 @@ int main()
 {
   int fd;
   int c;
-
-  if ((fd = serialOpen("/dev/ttyS2", 9600, 8, 1)) < 0)
+  // ttyS1 -> COM1
+  // ttyS2 -> COM2
+  if ((fd = serialOpen("/dev/ttyS1", 9600, 8, 1)) < 0)
   {
     fprintf(stderr, "Unable to open serial device: %s\n", strerror(errno));
     return 1;

@@ -27,64 +27,6 @@
 #define STATUS_REGISTERED           2
 #define STATUS_USER_BUTTON_ENABLE   4
 
-// Communication SIM900
-int module_status;
-int comm_line_status;
-void Echo(int state);
-char SendATCmdWaitResp(char *AT_cmd_string, uint16_t start_comm_tmout, uint16_t max_interchar_tmout, char const *response_string, int no_of_attempts);
-int WaitResp(uint16_t start_comm_tmout, uint16_t max_interchar_tmout);
-int WaitRespAdd(uint16_t start_comm_tmout, uint16_t max_interchar_tmout, char const *expected_resp_string);
-void RxInit(uint16_t start_comm_tmout, uint16_t max_interchar_tmout);
-int IsRxFinished(void);
-int IsStringReceived(char const *compare_string);
-
-// Serial port
-void serialBegin(long baud);
-void serialEnd();
-long checkBaud();
-
-// Others
-char *ChangeIToS(int IntNU);
-
-// Power
-void powerOn();
-void reset();
-int isOn();
-
-// GSM
-void init();
-void InitParam(int group);
-char InitSMSMemory();
-char SendSMS(char *number_str, char *message_str);
-char SendSMSSpecified(int sim_phonebook_position, char *message_str);
-char IsSMSPresent(int required_status);
-char GetSMS(int position, char *phone_number, char *SMS_text, int max_SMS_len);
-char GetAuthorizedSMS(int position, char *phone_number, char *SMS_text, int max_SMS_len, int first_authorized_pos, int last_authorized_pos);
-char DeleteSMS(int position);
-char DeleteAllSMS();
-char GetPhoneNumber(int position, char *phone_number);
-char WritePhoneNumber(int position, char *phone_number);
-char DelPhoneNumber(int position);
-char ComparePhoneNumber(int position, char *phone_number);
-
-char SetSpeakerVolume(int speaker_volume);
-char IncSpeakerVolume();
-char DecSpeakerVolume();
-
-char SendDTMFSignal(int dtmf_tone);
-
-int IsUserButtonEnable();
-void DisableUserButton();
-void EnableUserButton();
-int IsUserButtonPushed();
-
-void PickUp();
-void HangUp();
-int CallStatus();
-void CallS(char *number_string);
-void Call(int sim_position);
-int CallStatusWithAuth(char *phone_number, int first_authorized_pos, int last_authorized_pos);
-
 enum at_resp_enum
 {
 	AT_RESP_ERR_NO_RESP = -1,   // Nothing received
@@ -148,3 +90,70 @@ enum call_ret_val_enum
 	CALL_COMM_LINE_BUSY,
 	CALL_LAST_ITEM
 };
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+int module_status;
+int comm_line_status;
+
+// Communication SIM900
+extern void Echo(int state);
+extern char SendATCmdWaitResp(char *AT_cmd_string, uint16_t start_comm_tmout, uint16_t max_interchar_tmout, char const *response_string, int no_of_attempts);
+extern int WaitResp(uint16_t start_comm_tmout, uint16_t max_interchar_tmout);
+extern int WaitRespAdd(uint16_t start_comm_tmout, uint16_t max_interchar_tmout, char const *expected_resp_string);
+extern void RxInit(uint16_t start_comm_tmout, uint16_t max_interchar_tmout);
+extern int IsRxFinished(void);
+extern int IsStringReceived(char const *compare_string);
+
+// Serial port
+extern void serialBegin(long baud);
+extern void serialEnd();
+extern long checkBaud();
+
+// Others
+extern char *ChangeIToS(int IntNU);
+
+// Power
+extern void powerOn();
+extern void reset();
+extern int isOn();
+
+// GSM
+extern void init();
+extern void InitParam(int group);
+extern char InitSMSMemory();
+extern char SendSMS(char *number_str, char *message_str);
+extern char SendSMSSpecified(int sim_phonebook_position, char *message_str);
+extern char IsSMSPresent(int required_status);
+extern char GetSMS(int position, char *phone_number, char *SMS_text, int max_SMS_len);
+extern char GetAuthorizedSMS(int position, char *phone_number, char *SMS_text, int max_SMS_len, int first_authorized_pos, int last_authorized_pos);
+extern char DeleteSMS(int position);
+extern char DeleteAllSMS();
+extern char GetPhoneNumber(int position, char *phone_number);
+extern char WritePhoneNumber(int position, char *phone_number);
+extern char DelPhoneNumber(int position);
+extern char ComparePhoneNumber(int position, char *phone_number);
+
+extern char SetSpeakerVolume(int speaker_volume);
+extern char IncSpeakerVolume();
+extern char DecSpeakerVolume();
+
+extern char SendDTMFSignal(int dtmf_tone);
+
+extern int IsUserButtonEnable();
+extern void DisableUserButton();
+extern void EnableUserButton();
+extern int IsUserButtonPushed();
+
+extern void PickUp();
+extern void HangUp();
+extern int CallStatus();
+extern void CallS(char *number_string);
+extern void Call(int sim_position);
+extern int CallStatusWithAuth(char *phone_number, int first_authorized_pos, int last_authorized_pos);
+
+#ifdef __cplusplus
+}
+#endif

@@ -22,7 +22,8 @@
  *    along with wiringOli.  If not, see <http://www.gnu.org/licenses/>.
  ***********************************************************************
  */
- 
+
+#include <stdio.h> 
 #include <wiringOli.h>
 #include <oliExt.h>
 

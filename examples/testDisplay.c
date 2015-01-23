@@ -1,9 +1,9 @@
 /*
  * testDisplay.c:
  *        Standard 7 segments display program in wiringOli. Blinks the LED connected
- *        to the PG0 to PG7 GPIO pin on Olinuxino A20.
+ *        to the PG0 to PG5 and PI0, PI1 GPIO pin on Olinuxino A20.
  *
- * Copyright (c) 2012-2013 
+ * Copyright (c) 2012-2015 
  ***********************************************************************
  * This file is part of wiringOli:
  *        http://
@@ -22,7 +22,8 @@
  *    along with wiringOli.  If not, see <http://www.gnu.org/licenses/>.
  ***********************************************************************
  */
- 
+
+#include <stdio.h> 
 #include <wiringOli.h>
 #include <oliExt.h>
 

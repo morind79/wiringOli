@@ -129,7 +129,7 @@ void LCDHome(void)
  *	Set cursor to specified position on LCD
  *********************************************************************************
  */
-void LCDSetCursor(unsigned char row, unsigned char col)
+void LCDSetCursor(int row, int col)
 {
   unsigned char rowOffset[] = {0x00, 0x40, 0x14, 0x54};
   if (col < LCDDev.numCols && row < LCDDev.numRows)
@@ -273,7 +273,7 @@ void LCDBacklightOn(void)
  *	Create a user defined character
  *********************************************************************************
  */
-void LCDCreateChar(unsigned char location, unsigned char charMap[])
+void LCDCreateChar(int location, int charMap[])
 {
   unsigned char i;
   location &= 0x07;
@@ -289,7 +289,7 @@ void LCDCreateChar(unsigned char location, unsigned char charMap[])
  *	Show a character
  *********************************************************************************
  */
-void LCDShowChar(unsigned char row, unsigned char col, char ch)
+void LCDShowChar(int row, int col, char ch)
 {
   if (col < LCDDev.numCols && row < LCDDev.numRows)
   {
@@ -303,7 +303,7 @@ void LCDShowChar(unsigned char row, unsigned char col, char ch)
  *	Show a string
  *********************************************************************************
  */
-void LCDPrintString(unsigned char row, unsigned char col, char *pStr)
+void LCDPrintString(int row, int col, char *pStr)
 {
   char *p;
   p = pStr;

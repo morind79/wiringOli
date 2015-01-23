@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-extern void oliExtSetup(void);
+extern void oliExtSetup();
 extern int pinOliPortA(int pin);
 extern int pinOliPortB(int pin);
 extern int pinOliPortC(int pin);

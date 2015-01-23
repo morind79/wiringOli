@@ -57,7 +57,7 @@ struct sunxi_gpio_reg {
     struct sunxi_gpio_int gpio_int;
 };
 
-#define GPIO_BANK(pin)	        ((pin) >> 5)
+#define GPIO_BANK(pin)	      ((pin) >> 5)
 #define GPIO_NUM(pin)	        ((pin) & 0x1F)
 #define GPIO_PULL_INDEX(pin)	(((pin) & 0x1F) >> 4)
 #define GPIO_PULL_OFFSET(pin)	((((pin) & 0x1F) & 0xf) << 1)
@@ -159,15 +159,16 @@ extern "C" {
 #endif
 
 extern int sunxi_gpio_input(unsigned int pin);
-extern int sunxi_gpio_init(void);
+extern int sunxi_gpio_init();
 extern int sunxi_gpio_set_cfgpin(unsigned int pin, unsigned int val);
 extern int sunxi_gpio_get_cfgpin(unsigned int pin);
 extern int sunxi_gpio_set_pull(unsigned int pin, unsigned int val);
 extern int sunxi_gpio_output(unsigned int pin, unsigned int val);
-extern void sunxi_gpio_cleanup(void);
+extern void sunxi_gpio_cleanup();
 
-extern int wiringOliSetup(void);
+extern int wiringOliSetup();
 extern int pinWiringOli(int pin);
+extern int pinGpio(int pin);
 extern void pinMode(int pin, int mode);
 extern void pullUpDnControlGpio(int pin, int pud);
 extern int digitalRead(int pin);
@@ -177,7 +178,7 @@ extern void digitalWrite(int pin, int value);
 extern int waitForInterrupt(int pin, int mS);
 
 // Threads
-extern int  oliThreadCreate(void *(*fn)(void *)) ;
+extern int oliThreadCreate(void *(*fn)(void *)) ;
 extern void oliLock(int key) ;
 extern void oliUnlock(int key) ;
 
@@ -187,8 +188,8 @@ extern int oliHiPri(int pri) ;
 // Extras from arduino land
 extern void delay(unsigned int howLong);
 extern void delayMicroseconds(unsigned int howLong);
-extern unsigned int millis(void);
-extern unsigned int micros(void);
+extern unsigned int millis();
+extern unsigned int micros();
 
 #ifdef __cplusplus
 }

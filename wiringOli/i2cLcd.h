@@ -80,11 +80,11 @@ extern void LCDBacklightOff(void);
 extern void LCDBacklightOn(void);
 extern void LCDAutoScrollOff(void);
 extern void LCDAutoScrollOn(void);
-extern void LCDCreateChar(unsigned char location, unsigned char charMap[]);
+extern void LCDCreateChar(int location, int charMap[]);
 extern void LCDInit(int address, int row, int col);
-extern void LCDSetCursor(unsigned char row, unsigned char col);
-extern void LCDShowChar(unsigned char row, unsigned char col, char ch);
-extern void LCDPrintString(unsigned char row, unsigned char col, char *pStr);
+extern void LCDSetCursor(int row, int col);
+extern void LCDShowChar(int row, int col, char ch);
+extern void LCDPrintString(int row, int col, char *pStr);
 
 #ifdef __cplusplus
 }

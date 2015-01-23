@@ -476,7 +476,7 @@ int digitalReadSIM900_RI()
  *	              SIM900 PC7, PC3=output, PI11, PI10=input 
  *********************************************************************************
  */
-void oliExtSetup(void)
+void oliExtSetup()
 {
   int i = 0;
   // Port A and B (16 bit) -> Input

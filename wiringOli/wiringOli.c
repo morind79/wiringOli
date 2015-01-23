@@ -7,9 +7,20 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <poll.h>
 #include <time.h>
 #include <sys/time.h>
+#include <ctype.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <sys/ioctl.h>
 
 #include "wiringOli.h"
 #include "interrupt.h"
@@ -47,6 +58,17 @@ static int pinToGpio[128] =
   -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,                                                    // ... 127
 };
 
+// Translation between pin number and gpio number from fex
+static int convPinToGpio[81] = {55, 56, 57, 58, 59, 60,  0,  0,  0,  0, 
+                                 0,  0, 61, 62,  0,  0,  0, 53, 49, 50, 
+                                51, 52, 54,  0,  0,  0,  0, 37, 38, 39,
+                                40, 41, 42, 43, 44, 45, 46, 47, 48,  0,
+                                 0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
+                                10, 11, 12, 13, 14, 15, 16, 31, 32,  0,
+                                 0,  0,  0, 17, 18, 19, 20, 21, 22, 23,
+                                24, 25, 26, 27, 28, 29, 30, 33, 34, 35,
+                                36};
+
 // Time for easy calculations
 static uint64_t epochMilli, epochMicro;
 
@@ -59,6 +81,21 @@ int pinWiringOli(int pin)
 {
   // To be sure to have a correct pin number
   return pinToGpio[pin & 127];
+}
+
+/*
+ * pinGpio:
+ *	Get GPIO pin from fex to corresponding board pin
+ *********************************************************************************
+ */
+int pinGpio(int pin)
+{
+  // Check we have the good range
+  if ((pin < 0) || (pin > 81))
+  {
+    return 0;
+  }
+  return convPinToGpio[pin];
 }
 
 /*
@@ -88,7 +125,7 @@ void pullUpDnControlGpio(int pin, int pud)
  *	Read the value of a given Pin, returning HIGH or LOW
  *********************************************************************************
  */
-int  digitalRead(int pin)
+int digitalRead(int pin)
 {
   return(sunxi_gpio_input(pinWiringOli(pin)));
 }
@@ -141,7 +178,7 @@ int waitForInterrupt(int pin, int mS)
  *********************************************************************************
  */
 
-static void initialiseEpoch (void)
+static void initialiseEpoch()
 {
   struct timeval tv ;
 
@@ -156,7 +193,7 @@ static void initialiseEpoch (void)
  *********************************************************************************
  */
 
-void delay (unsigned int howLong)
+void delay(unsigned int howLong)
 {
   struct timespec sleeper, dummy ;
 
@@ -166,7 +203,7 @@ void delay (unsigned int howLong)
   nanosleep (&sleeper, &dummy) ;
 }
 
-void delayMicrosecondsHard (unsigned int howLong)
+void delayMicrosecondsHard(unsigned int howLong)
 {
   struct timeval tNow, tLong, tEnd ;
 
@@ -179,7 +216,7 @@ void delayMicrosecondsHard (unsigned int howLong)
     gettimeofday (&tNow, NULL) ;
 }
 
-void delayMicroseconds (unsigned int howLong)
+void delayMicroseconds(unsigned int howLong)
 {
   struct timespec sleeper ;
   unsigned int uSecs = howLong % 1000000 ;
@@ -203,7 +240,7 @@ void delayMicroseconds (unsigned int howLong)
  *********************************************************************************
  */
 
-unsigned int millis(void)
+unsigned int millis()
 {
   struct timeval tv;
   uint64_t now;
@@ -221,7 +258,7 @@ unsigned int millis(void)
  *********************************************************************************
  */
 
-unsigned int micros(void)
+unsigned int micros()
 {
   struct timeval tv ;
   uint64_t now ;
@@ -241,29 +278,30 @@ unsigned int micros(void)
  *********************************************************************************
  */
 
-int wiringOliSetup(void)
+int wiringOliSetup()
 {
 
   initialiseEpoch() ;
   int result;
   result = sunxi_gpio_init();
-  if(result == SETUP_DEVMEM_FAIL) {
-	printf("No access to /dev/mem. Try running as root !");
-	return SETUP_DEVMEM_FAIL;
+  if(result == SETUP_DEVMEM_FAIL) 
+  {
+    printf("No access to /dev/mem. Try running as root !");
+    return SETUP_DEVMEM_FAIL;
   }
-  else if(result == SETUP_MALLOC_FAIL) {
-	printf("No memory !");
-	return SETUP_MALLOC_FAIL;
+  else if(result == SETUP_MALLOC_FAIL) 
+  {
+    printf("No memory !");
+    return SETUP_MALLOC_FAIL;
   }
-  else if(result == SETUP_MMAP_FAIL) {
-	printf("Mmap failed on module import");
-	return SETUP_MMAP_FAIL;
+  else if(result == SETUP_MMAP_FAIL) 
+  {
+    printf("Mmap failed on module import");
+    return SETUP_MMAP_FAIL;
   }
   else 
   {
-	return SETUP_OK;
+    return SETUP_OK;
   }
-
-  return SETUP_OK;
+return SETUP_OK;
 }
-

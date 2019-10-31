@@ -1,0 +1,9 @@
+# depslib dependency file v1.0
+1422980456 source:/home/denis/pascal/Pascal/main.c
+	<wiringOli.h>
+	<oliExt.h>
+	<GSM.h>
+	<stdio.h>
+	<i2cLcd.h>
+	<string.h>
+

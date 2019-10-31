@@ -1,0 +1,27 @@
+(A=0)               Salon down
+(A=1)               Salon up
+(B=0)               Salle de bain down
+(B=1)               Salle de bain up
+(C=0)               Chambre Erine down
+(C=1)               Chambre Erine up
+(D=0)               Chambre Eva down
+(D=1)               Chambre Eva up
+(E=0)               Chambre Laura down
+(E=1)               Chambre Laura up
+(F=0)               Salle à manger down
+(F=1)               Salle à manger up
+(G=0)               Cuisine down
+(G=1)               Cuisine up
+(H=0)               Cellier down
+(H=1)               Cellier up
+(I=0)               Général down
+(I=1)               Génaral up
+
+(J=0)               Alarme inactive
+(J=1)               Alarme active
+
+(K=0)               Relay 0 off
+(K=1)               Relay 0 on
+
+Ctrl-a d -> Detach
+screen –r -> restore

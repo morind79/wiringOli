@@ -1,0 +1,11 @@
+#!/bin/sh
+
+SERVICE="gammu-smsd"
+RESULT=`ps -e | sed -n /${SERVICE}/p`
+
+if [ "${RESULT:-null}" = null ]; then
+  echo "not running"
+else
+  echo "${SERVICE} is running. Start OliExt program"
+  sleep 60 ; /home/denis/pascal/sms
+fi

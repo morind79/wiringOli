@@ -22,23 +22,14 @@
  *  A14 Cellier up     A15 Cellier down
  *
  * Input pin on Port General
- *  PG0 General up     PG1 General down
+ *  C0 General up     C1 General down
  *
- * Input pin on Port C
- *  C0 Motion detector service door
- *  C1 Motion detector cars
- *  C2 Unused
- *  C3 Water meter
- *  C4 garage door Cecile
- *  C5 garage doot Denis
- *  C6 IR Barrier
- *  C7 Push button in bathroom
  *  run : gpio load i2c
  *
- * Input pin on Port D
- *  D0 Grid power failure
- *  gcc -Wall -o shutter shutter4.c teleinfo.c -lwiringOli $(mysql_config --cflags) $(mysql_config --libs) -lncurses
+ *  gcc -Wall -o shutter shutter4.c -lwiringOli $(mysql_config --cflags) $(mysql_config --libs) -lncurses
  *  ./shutter
+ *  
+ * Screen 90x30 characters  
  *
  * @author denm
  */
@@ -55,11 +46,13 @@
 #include <stdarg.h>
 #include <time.h>
 #include <ncurses.h>
-#include "teleinfo.h"
 
 MYSQL *connection;
 time_t t;
 struct tm tm;
+int now_sec, now_min, now_hour, now_day, now_wday, now_month, now_year;
+time_t now;
+struct tm *now_tm;
 
 int readDB();
 void clearDB();
@@ -75,10 +68,9 @@ char *concat(int count, ...);
 char *substring(char *string, int position, int length);
 void sendSMSAlarm(char *message);
 void roundDisplay(int value);
-void printDate();
-void queryEnergyMeter();
-void queryWaterMeter();
-void processEnergyMeter(int channel);
+void printDate(int x, int y, int color);
+void maketime();
+void printString(int x, int y, int color, char *msg);
 
 int alarmStatus = 0;          // When 0 set alarm off
 unsigned long prevAlarm1;     // Variable used for knowing time since last alarm1
@@ -86,14 +78,12 @@ unsigned long prevAlarm2;     // Variable used for knowing time since last alarm
 int powerFail = 0;            // 0 -> No power, 1 -> Power ok
 long timeBetweenSMS = 50000;  // Waiting time before sending another SMS in ms
 int alarmActive = 0;          // 0 -> Alarm not active, 1 -> Alarme active
-int fdMCPEnergy = 0;          // MCP file descriptor for energy meter board
-int water = 0;                // Water volume measured
 const char *DENIS = "+33626281284";
 
 // Timing for shutters
 const int SMALL = 15000;
 const int MEDIUM = 20000;
-const int BIG = 45000;
+const int BIG = 35000;
 
 int motorUp[] = {1, 3, 5, 7, 9, 11, 12, 14};
 int motorDown[] = {0, 2, 4, 6, 8, 10, 13, 15};
@@ -176,7 +166,8 @@ OLI_THREAD(ri)
   int clearForToday = 0;
   MYSQL mysql;
   oliHiPri(10);
-  printf("RI thread starts...\n"); fflush(stdout);
+  printString(3, 0, 3, "RI thread starts...");
+  //printf("RI thread starts...\n"); fflush(stdout);
   // Loop
   while(1)
   {
@@ -184,14 +175,16 @@ OLI_THREAD(ri)
     if (digitalReadSIM900_RI() == 0)
     {
       oliLock(0);
-      printf("RI detected...\n");
+      printString(3, 30, 3, "RI detected...");
+      printString(3, 60, 3, "                             "); // Erase MySQL errors
+      //printf("RI detected...\n");
       // connect to the MySQL database at localhost
       mysql_init(&mysql);
-      connection = mysql_real_connect(&mysql, "localhost", "gammu", "gammu", "SMS", 0, 0, 0);
+      connection = mysql_real_connect(&mysql,"localhost", "gammu", "gammu", "SMS", 0, 0, 0);
       // check for a connection error
       if (connection == NULL)
       {
-        printf(mysql_error(&mysql));
+        //printf(mysql_error(&mysql));
       }
       // Wait time Gammu store SMS in database
       delay(10000);
@@ -203,13 +196,14 @@ OLI_THREAD(ri)
       }
       // close the connection
       mysql_close(connection);
+      printString(3, 30, 3, "              ");
       oliUnlock(0);
     }
     // Get current time
     t = time(NULL);
     tm = *localtime(&t);
     // If time is 1:00 then clean DB
-    if ((tm.tm_hour == 1) && (tm.tm_min == 0) && (clearForToday == 0))
+    if ((tm.tm_hour == 1) && (tm.tm_min == 00) && (clearForToday == 0))
     {
       oliLock(0);
       // connect to the MySQL database at localhost
@@ -218,18 +212,22 @@ OLI_THREAD(ri)
       // check for a connection error
       if (connection == NULL)
       {
-        printf(mysql_error(&mysql));
+        attron(COLOR_PAIR(3));
+        mvprintw(3, 60, "%s", mysql_error(&mysql));
+        refresh();
+        //printf(mysql_error(&mysql));
       }
       clearDB();
       clearForToday = 1;
-      queryEnergyMeter();
-      queryWaterMeter();
-      printf("Clean DB at : %d:%d\n", tm.tm_hour, tm.tm_min);
+      attron(COLOR_PAIR(3));
+      mvprintw(2, 0, "Clean DB at : %02d:%02d", tm.tm_hour, tm.tm_min);
+      refresh();
+      //printf("Clean DB at : %02d:%02d\n", tm.tm_hour, tm.tm_min);
       // close the connection
       mysql_close(connection);
       oliUnlock(0);
     }
-    if ((tm.tm_hour == 1) && (tm.tm_min == 5) && (clearForToday == 1))
+    if ((tm.tm_hour == 1) && (tm.tm_min == 05) && (clearForToday == 1))
     {
       clearForToday = 0;
     }
@@ -248,119 +246,42 @@ OLI_THREAD(ri)
 
 OLI_THREAD(alarm)
 {
-  char *status;
   oliHiPri(1);
-  int waterDone = 0;
-  printf("Alarm thread starts...\n"); fflush(stdout);
   while(1)
   {
-    // Port C0 = motion detector service door **********************************
+    // Port C0 = motion detector service door
     if ((digitalReadPortC(0) == 0) && (alarmActive == 1))
     {
-      status = concat(0);
-      status = concat(2, status, "Detection mouvement porte de service");
       if (millis() - prevAlarm1 >= timeBetweenSMS)
       {
-        printf("Detecteur porte service ");
-        sendSMSAlarm(status);
+        printString(6, 0, 3, "Detecteur porte service "); printDate(6, 25, 5);
+        //printf("Detecteur porte service ");
         alarmStatus = 1;
-        printDate();
+        mcp23008DigitalWrite(0, HIGH);
         prevAlarm1 = millis();
       }
-      free(status);
     }
-    // Port C1 = motion detector cars ******************************************
+    // Port C1 = motion detector cars
     if ((digitalReadPortC(1) == 0) && (alarmActive == 1))
     {
-      status = concat(0);
-      status = concat(2, status, "Detection mouvement voiture");
       if (millis() - prevAlarm2 >= timeBetweenSMS)
       {
-        printf("Detecteur voiture ");
-        sendSMSAlarm(status);
+        printString(7, 0, 3, "Detecteur voiture "); printDate(7, 25, 5);
+        //printf("Detecteur voiture ");
         alarmStatus = 1;
-        printDate();
+        mcp23008DigitalWrite(1, HIGH);
         prevAlarm2 = millis();
       }
-      free(status);
     }
-
-    // port C2 = detecteur zone 3 **********************************************
-    //printf("%d %d %d %d %d %d %d %d\n", digitalReadPortC(0), digitalReadPortC(1), digitalReadPortC(2),
+    //printf("%d %d %d %d %d %d %d %d\n", digitalReadPortC(0), digitalReadPortC(1), digitalReadPortC(2), 
     //                                    digitalReadPortC(3), digitalReadPortC(4), digitalReadPortC(5),
     //                                    digitalReadPortC(6), digitalReadPortC(7));
-    // Water meter
-    // Port C3 = water meter ***************************************************
-    if ((digitalReadPortC(3) == 0) && (waterDone == 0))
-    {
-      water++;
-      printf("Water : %d\n", water);
-      waterDone = 1;
-    }
-    else if ((digitalReadPortC(3) == 1) && (waterDone == 1))
-    {
-      waterDone = 0;
-    }
-    // Port C4 garage door *****************************************************
-    if ((digitalReadPortC(4) == 1) && (alarmActive == 1))
-    {
-      status = concat(0);
-      status = concat(2, status, "Portail Cecile ouvert");
-      if (millis() - prevAlarm2 >= timeBetweenSMS)
-      {
-        printf("Portail Cecile ouvert ");
-        sendSMSAlarm(status);
-        alarmStatus = 1;
-        printDate();
-        prevAlarm2 = millis();
-      }
-      free(status);
-    }
-    // Port C5 garage door *****************************************************
-    if ((digitalReadPortC(5) == 1) && (alarmActive == 1))
-    {
-      status = concat(0);
-      status = concat(2, status, "Portail Denis ouvert");
-      if (millis() - prevAlarm2 >= timeBetweenSMS)
-      {
-        printf("Portail Denis ouvert ");
-        sendSMSAlarm(status);
-        alarmStatus = 1;
-        printDate();
-        prevAlarm2 = millis();
-      }
-      free(status);
-    }
-    // Port C6 = IR Barrier detector *******************************************
-    if ((digitalReadPortC(6) == 1) && (alarmActive == 1))
-    {
-      status = concat(0);
-      status = concat(2, status, "IR Barrier");
-      if (millis() - prevAlarm2 >= timeBetweenSMS)
-      {
-        printf("IR Barrier ");
-        sendSMSAlarm(status);
-        alarmStatus = 1;
-        printDate();
-        prevAlarm2 = millis();
-      }
-      free(status);
-    }
-    // Port D0 = Grid power failure
-    if (digitalReadPortD(0) == 0)
-    {
-      status = concat(0);
-      status = concat(2, status, "Grid power failure");
-      if (millis() - prevAlarm2 >= timeBetweenSMS)
-      {
-        printf("Grid Poser failure ");
-        sendSMSAlarm(status);
-        alarmStatus = 1;
-        printDate();
-        prevAlarm2 = millis();
-      }
-      free(status);
-    }
+    
+    // Display clock
+    maketime();
+    attron(COLOR_PAIR(2));
+    mvprintw(0, 80, "%02d:%02d:%02d", now_hour, now_min, now_sec);
+    refresh();
     delay(100);
   }
 }
@@ -373,7 +294,10 @@ OLI_THREAD(alarmOff)
     if (alarmStatus == 1)
     {
       delay(30000);
-
+      mcp23008DigitalWrite(0, LOW);
+      mcp23008DigitalWrite(1, LOW);
+      printString(6, 0, 3, "                        "); // Erase motion detector errors
+      printString(7, 0, 3, "                  ");
     }  
     delay(1000);
   }
@@ -386,162 +310,158 @@ OLI_THREAD(buttons)
   // Loop
   for (;;)
   {
-    // Read button only when power grid is present
-    if (digitalReadPortD(0) == 1)
+    // Salon
+    if (salonUp != digitalReadPortA(buttonUp[0]))
     {
-      // Salon
-      if (salonUp != digitalReadPortA(buttonUp[0]))
-      {
-        salonUp = digitalReadPortA(buttonUp[0]);
-        salonForceUp = 0;
-        salonForceDown = 0;
-        if (salonUp != 0) {salonUpChanged = 1; printf("Salon button up = 1 "); fflush(stdout); printDate();}
-        else {salonUpChanged = 0;  printf("Salon button up = 0 "); fflush(stdout); printDate();}
-      }
-      if (salonDown != digitalReadPortA(buttonDown[0]))
-      {
-        salonDown = digitalReadPortA(buttonDown[0]);
-        salonForceUp = 0;
-        salonForceDown = 0;
-        if (salonDown != 0) {salonDownChanged = 1; printf("Salon button down = 1 "); fflush(stdout); printDate();}
-        else {salonDownChanged = 0;  printf("Salon button down = 0 "); fflush(stdout); printDate();}
-      }
-      // Sdb
-      if (sdbUp != digitalReadPortA(buttonUp[1]))
-      {
-        sdbUp = digitalReadPortA(buttonUp[1]);
-        sdbForceUp = 0;
-        sdbForceDown = 0;
-        if (sdbUp != 0) { sdbUpChanged = 1; printf("Sdb button up = 1 "); fflush(stdout); printDate();}
-        else { sdbUpChanged = 0;  printf("Sdb button up = 0 "); fflush(stdout); printDate();}
-      }
-      if (sdbDown != digitalReadPortA(buttonDown[1]))
-      {
-        sdbDown = digitalReadPortA(buttonDown[1]);
-        sdbForceUp = 0;
-        sdbForceDown = 0;
-        if (sdbDown != 0) {sdbDownChanged = 1;  printf("Sdb button down = 1 "); fflush(stdout); printDate();}
-        else {sdbDownChanged = 0;  printf("Sdb button down = 0 "); fflush(stdout); printDate();}
-      }
-      // Erine
-      if (erineUp != digitalReadPortA(buttonUp[2]))
-      {
-        erineUp = digitalReadPortA(buttonUp[2]);
-        erineForceUp = 0;
-        erineForceDown = 0;
-        if (erineUp != 0) {erineUpChanged = 1;  printf("Erine button up = 1 "); fflush(stdout); printDate();}
-        else {erineUpChanged = 0;  printf("Erine button up = 0 "); fflush(stdout); printDate();}
-      }
-      if (erineDown != digitalReadPortA(buttonDown[2]))
-      {
-        erineDown = digitalReadPortA(buttonDown[2]);
-        erineForceUp = 0;
-        erineForceDown = 0;
-        if (erineDown != 0) {erineDownChanged = 1;  printf("Erine button down = 1 "); fflush(stdout); printDate();}
-        else {erineDownChanged = 0;  printf("Erine button down = 0 "); fflush(stdout); printDate();}
-      }
-      // Eva
-      if (evaUp != digitalReadPortA(buttonUp[3]))
-      {
-        evaUp = digitalReadPortA(buttonUp[3]);
-        evaForceUp = 0;
-        evaForceDown = 0;
-        if (evaUp != 0) {evaUpChanged = 1;  printf("Eva button up = 1 "); fflush(stdout); printDate();}
-        else {evaUpChanged = 0;  printf("Eva button up = 0 "); fflush(stdout); printDate();}
-      }
-      if (evaDown != digitalReadPortA(buttonDown[3]))
-      {
-        evaDown = digitalReadPortA(buttonDown[3]);
-        evaForceUp = 0;
-        evaForceDown = 0;
-        if (evaDown != 0) {evaDownChanged = 1;  printf("Eva button down = 1 "); fflush(stdout); printDate();}
-        else {evaDownChanged = 0;  printf("Eva button down = 0 "); fflush(stdout); printDate();}
-      }
-      // Laura
-      if (lauraUp != digitalReadPortA(buttonUp[4]))
-      {
-        lauraUp = digitalReadPortA(buttonUp[4]);
-        lauraForceUp = 0;
-        lauraForceDown = 0;
-        if (lauraUp != 0) {lauraUpChanged = 1;  printf("Laura button up = 1 "); fflush(stdout); printDate();}
-        else {lauraUpChanged = 0;  printf("Laura button up = 0 "); fflush(stdout); printDate();}
-      }
-      if (lauraDown != digitalReadPortA(buttonDown[4]))
-      {
-        lauraDown = digitalReadPortA(buttonDown[4]);
-        lauraForceUp = 0;
-        lauraForceDown = 0;
-        if (lauraDown != 0) {lauraDownChanged = 1;  printf("Laura button down = 1 "); fflush(stdout); printDate();}
-        else {lauraDownChanged = 0;  printf("Laura button down = 0 "); fflush(stdout); printDate();}
-      }
-      // Sam
-      if (samUp != digitalReadPortA(buttonUp[5]))
-      {
-        samUp = digitalReadPortA(buttonUp[5]);
-        samForceUp = 0;
-        samForceDown = 0;
-        if (samUp != 0) {samUpChanged = 1;  printf("Sam button up = 1 "); fflush(stdout); printDate();}
-        else {samUpChanged = 0;  printf("Sam button up = 0 "); fflush(stdout); printDate();}
-      }
-      if (samDown != digitalReadPortA(buttonDown[5]))
-      {
-        samDown = digitalReadPortA(buttonDown[5]);
-        samForceUp = 0;
-        samForceDown = 0;
-        if (samDown != 0) {samDownChanged = 1;  printf("Sam button down = 1 "); fflush(stdout); printDate();}
-        else {samDownChanged = 0;  printf("Sam button down = 0 "); fflush(stdout); printDate();}
-      }
-      // Cuisine
-      if (cuisineUp != digitalReadPortA(buttonUp[6]))
-      {
-        cuisineUp = digitalReadPortA(buttonUp[6]);
-        cuisineForceUp = 0;
-        cuisineForceDown = 0;
-        if (cuisineUp != 0) {cuisineUpChanged = 1;  printf("Cuisine button up = 1 "); fflush(stdout); printDate();}
-        else {cuisineUpChanged = 0;  printf("Cuisine  button up = 0 "); fflush(stdout); printDate();}
-      }
-      if (cuisineDown != digitalReadPortA(buttonDown[6]))
-      {
-        cuisineDown = digitalReadPortA(buttonDown[6]);
-        cuisineForceUp = 0;
-        cuisineForceDown = 0;
-        if (cuisineDown != 0) {cuisineDownChanged = 1;  printf("Cuisine button down = 1 "); fflush(stdout); printDate();}
-        else {cuisineDownChanged = 0;  printf("Cuisine button down = 0 "); fflush(stdout); printDate();}
-      }
-      // Cellier
-      if (cellierUp != digitalReadPortA(buttonUp[7]))
-      {
-        cellierUp = digitalReadPortA(buttonUp[7]);
-        cellierForceUp = 0;
-        cellierForceDown = 0;
-        if (cellierUp != 0) {cellierUpChanged = 1;  printf("Cellier button up = 1 "); fflush(stdout); printDate();}
-        else {cellierUpChanged = 0;  printf("Cellier button up = 0 "); fflush(stdout); printDate();}
-      }
-      if (cellierDown != digitalReadPortA(buttonDown[7]))
-      {
-        cellierDown = digitalReadPortA(buttonDown[7]);
-        cellierForceUp = 0;
-        cellierForceDown = 0;
-        if (cellierDown != 0) {cellierDownChanged = 1;  printf("Cellier button down = 1 "); fflush(stdout); printDate();}
-        else {cellierDownChanged = 0;  printf("Cellier button down = 0 "); fflush(stdout); printDate();}
-      }
-      // Gen
-      if (genUp != digitalReadPortGeneral(buttonCentralizedUp))
-      {
-        genUp = digitalReadPortGeneral(buttonCentralizedUp);
-        genForceUp = 0;
-        genForceDown = 0;
-        if (genUp != 0) {genUpChanged = 1;  printf("Gen button up = 1 "); fflush(stdout); printDate();}
-        else {genUpChanged = 0;  printf("Gen button up = 0 "); fflush(stdout); printDate();}
-      }
-      if (genDown != digitalReadPortGeneral(buttonCentralizedDown))
-      {
-        genDown = digitalReadPortGeneral(buttonCentralizedDown);
-        genForceUp = 0;
-        genForceDown = 0;
-        if (genDown != 0) {genDownChanged = 1;  printf("Gen button down = 1 "); fflush(stdout); printDate();}
-        else {genDownChanged = 0;  printf("Gen button down = 0 "); fflush(stdout); printDate();}
-      }
+      salonUp = digitalReadPortA(buttonUp[0]);
+      salonForceUp = 0;
+      salonForceDown = 0;
+      if (salonUp != 0) {salonUpChanged = 1; printString(9, 0, 3, "Salon button up = 1 "); printDate(9, 25, 5);}
+      else {salonUpChanged = 0;              printString(9, 0, 3, "Salon button up = 0 "); printDate(9, 25, 5);}
+    }
+    if (salonDown != digitalReadPortA(buttonDown[0]))
+    {
+      salonDown = digitalReadPortA(buttonDown[0]);
+      salonForceUp = 0;
+      salonForceDown = 0;
+      if (salonDown != 0) {salonDownChanged = 1; printString(9, 40, 3, "Salon button down = 1 "); printDate(9, 65, 5);}
+      else {salonDownChanged = 0;                printString(9, 40, 3, "Salon button down = 0 "); printDate(9, 65, 5);}
+    }
+    // Sdb
+    if (sdbUp != digitalReadPortA(buttonUp[1]))
+    {
+      sdbUp = digitalReadPortA(buttonUp[1]);
+      sdbForceUp = 0;
+      sdbForceDown = 0;
+      if (sdbUp != 0) { sdbUpChanged = 1; printString(10, 0, 3, "Sdb button up = 1 "); printDate(10, 25, 5);}
+      else { sdbUpChanged = 0;            printString(10, 0, 3, "Sdb button up = 0 "); printDate(10, 25, 5);}
+    }
+    if (sdbDown != digitalReadPortA(buttonDown[1]))
+    {
+      sdbDown = digitalReadPortA(buttonDown[1]);
+      sdbForceUp = 0;
+      sdbForceDown = 0;
+      if (sdbDown != 0) {sdbDownChanged = 1;  printString(10, 40, 3, "Sdb button down = 1 "); printDate(10, 65, 5);}
+      else {sdbDownChanged = 0;               printString(10, 40, 3, "Sdb button down = 0 "); printDate(10, 65, 5);}
+    }
+    // Erine
+    if (erineUp != digitalReadPortA(buttonUp[2]))
+    {
+      erineUp = digitalReadPortA(buttonUp[2]);
+      erineForceUp = 0;
+      erineForceDown = 0;
+      if (erineUp != 0) {erineUpChanged = 1;  printString(11, 0, 3, "Erine button up = 1 "); printDate(11, 25, 5);}
+      else {erineUpChanged = 0;               printString(11, 0, 3, "Erine button up = 0 "); printDate(11, 25, 5);}
+    }
+    if (erineDown != digitalReadPortA(buttonDown[2]))
+    {
+      erineDown = digitalReadPortA(buttonDown[2]);
+      erineForceUp = 0;
+      erineForceDown = 0;
+      if (erineDown != 0) {erineDownChanged = 1;  printString(11, 40, 3, "Erine button down = 1 "); printDate(11, 65, 5);}
+      else {erineDownChanged = 0;                 printString(11, 40, 3, "Erine button down = 0 "); printDate(11, 65, 5);}
+    }
+    // Eva
+    if (evaUp != digitalReadPortA(buttonUp[3]))
+    {
+      evaUp = digitalReadPortA(buttonUp[3]);
+      evaForceUp = 0;
+      evaForceDown = 0;
+      if (evaUp != 0) {evaUpChanged = 1;  printString(12, 0, 3, "Eva button up = 1 "); printDate(12, 25, 5);}
+      else {evaUpChanged = 0;             printString(12, 0, 3, "Eva button up = 0 "); printDate(12, 25, 5);}
+    }
+    if (evaDown != digitalReadPortA(buttonDown[3]))
+    {
+      evaDown = digitalReadPortA(buttonDown[3]);
+      evaForceUp = 0;
+      evaForceDown = 0;
+      if (evaDown != 0) {evaDownChanged = 1;  printString(12, 40, 3, "Eva button down = 1 "); printDate(12, 65, 5);}
+      else {evaDownChanged = 0;               printString(12, 40, 3, "Eva button down = 0 "); printDate(12, 65, 5);}
+    }
+    // Laura
+    if (lauraUp != digitalReadPortA(buttonUp[4]))
+    {
+      lauraUp = digitalReadPortA(buttonUp[4]);
+      lauraForceUp = 0;
+      lauraForceDown = 0;
+      if (lauraUp != 0) {lauraUpChanged = 1;  printString(13, 0, 3, "Laura button up = 1 "); printDate(13, 25, 5);}
+      else {lauraUpChanged = 0;               printString(13, 0, 3, "Laura button up = 0 "); printDate(13, 25, 5);}
+    }
+    if (lauraDown != digitalReadPortA(buttonDown[4]))
+    {
+      lauraDown = digitalReadPortA(buttonDown[4]);
+      lauraForceUp = 0;
+      lauraForceDown = 0;
+      if (lauraDown != 0) {lauraDownChanged = 1;  printString(13, 40, 3, "Laura button down = 1 "); printDate(13, 65, 5);}
+      else {lauraDownChanged = 0;                 printString(13, 40, 3, "Laura button down = 0 "); printDate(13, 65, 5);}
+    }
+    // Sam
+    if (samUp != digitalReadPortA(buttonUp[5]))
+    {
+      samUp = digitalReadPortA(buttonUp[5]);
+      samForceUp = 0;
+      samForceDown = 0;
+      if (samUp != 0) {samUpChanged = 1;  printString(14, 0, 3, "Sam button up = 1 "); printDate(14, 25, 5);}
+      else {samUpChanged = 0;             printString(14, 0, 3, "Sam button up = 0 "); printDate(14, 25, 5);}
+    }
+    if (samDown != digitalReadPortA(buttonDown[5]))
+    {
+      samDown = digitalReadPortA(buttonDown[5]);
+      samForceUp = 0;
+      samForceDown = 0;
+      if (samDown != 0) {samDownChanged = 1;  printString(14, 40, 3, "Sam button down = 1 "); printDate(14, 65, 5);}
+      else {samDownChanged = 0;               printString(14, 40, 3, "Sam button down = 0 "); printDate(14, 65, 5);}
+    }
+    // Cuisine
+    if (cuisineUp != digitalReadPortA(buttonUp[6]))
+    {
+      cuisineUp = digitalReadPortA(buttonUp[6]);
+      cuisineForceUp = 0;
+      cuisineForceDown = 0;
+      if (cuisineUp != 0) {cuisineUpChanged = 1;  printString(15, 0, 3, "Cuisine button up = 1 "); printDate(15, 25, 5);}
+      else {cuisineUpChanged = 0;                 printString(15, 0, 3, "Cuisine  button up = 0 "); printDate(15, 25, 5);}
+    }
+    if (cuisineDown != digitalReadPortA(buttonDown[6]))
+    {
+      cuisineDown = digitalReadPortA(buttonDown[6]);
+      cuisineForceUp = 0;
+      cuisineForceDown = 0;
+      if (cuisineDown != 0) {cuisineDownChanged = 1;  printString(15, 40, 3, "Cuisine button down = 1 "); printDate(15, 65, 5);}
+      else {cuisineDownChanged = 0;                   printString(15, 40, 3, "Cuisine button down = 0 "); printDate(15, 65, 5);}
+    }
+    // Cellier
+    if (cellierUp != digitalReadPortA(buttonUp[7]))
+    {
+      cellierUp = digitalReadPortA(buttonUp[7]);
+      cellierForceUp = 0;
+      cellierForceDown = 0;
+      if (cellierUp != 0) {cellierUpChanged = 1;  printString(16, 0, 3, "Cellier button up = 1 "); printDate(16, 25, 5);}
+      else {cellierUpChanged = 0;                 printString(16, 0, 3, "Cellier button up = 0 "); printDate(16, 25, 5);}
+    }
+    if (cellierDown != digitalReadPortA(buttonDown[7]))
+    {
+      cellierDown = digitalReadPortA(buttonDown[7]);
+      cellierForceUp = 0;
+      cellierForceDown = 0;
+      if (cellierDown != 0) {cellierDownChanged = 1;  printString(16, 40, 3, "Cellier button down = 1 "); printDate(16, 65, 5);}
+      else {cellierDownChanged = 0;                   printString(16, 40, 3, "Cellier button down = 0 "); printDate(16, 65, 5);}
+    }
+    // Gen
+    if (genUp != digitalReadPortGeneral(buttonCentralizedUp))
+    {
+      genUp = digitalReadPortGeneral(buttonCentralizedUp);
+      genForceUp = 0;
+      genForceDown = 0;
+      if (genUp != 0) {genUpChanged = 1;  printString(17, 0, 3, "Gen button up = 1 "); printDate(17, 25, 5);}
+      else {genUpChanged = 0;             printString(17, 0, 3, "Gen button up = 0 "); printDate(17, 25, 5);}
+    }
+    if (genDown != digitalReadPortGeneral(buttonCentralizedDown))
+    {
+      genDown = digitalReadPortGeneral(buttonCentralizedDown);
+      genForceUp = 0;
+      genForceDown = 0;
+      if (genDown != 0) {genDownChanged = 1;  printString(17, 0, 3, "Gen button down = 1 "); printDate(17, 65, 5);}
+      else {genDownChanged = 0;               printString(17, 0, 3, "Gen button down = 0 "); printDate(17, 65, 5);}
     }
     delay(5);
   }
@@ -550,7 +470,7 @@ OLI_THREAD(buttons)
 OLI_THREAD(salon)
 {
   oliHiPri(10);
-  printf("Shutter thread salon starts...\n"); fflush(stdout);
+  //printf("Shutter thread salon starts...\n"); fflush(stdout);
   // Loop
   while(1)
   {
@@ -560,7 +480,8 @@ OLI_THREAD(salon)
       salonUpChanged = 0;
       digitalWritePortB(motorDown[0], LOW);
       digitalWritePortB(motorUp[0], HIGH);
-      printf("Salon up\n"); fflush(stdout);
+      printString(9, 75, 4, "Salon up  ");
+      //printf("Salon up\n"); fflush(stdout);
       int timout = 0;
       while((timout < MEDIUM) && ((digitalReadPortA(buttonUp[0]) == 1) || (salonForceUp == 1)))
       {
@@ -577,7 +498,8 @@ OLI_THREAD(salon)
       salonDownChanged = 0;
       digitalWritePortB(motorUp[0], LOW);
       digitalWritePortB(motorDown[0], HIGH);
-      printf("Salon down\n"); fflush(stdout);
+      printString(9, 75, 4, "Salon down");
+      //printf("Salon down\n"); fflush(stdout);
       int timout = 0;
       while((timout < MEDIUM) && ((digitalReadPortA(buttonDown[0]) == 1) || (salonForceDown == 1)))
       {
@@ -595,7 +517,7 @@ OLI_THREAD(salon)
 OLI_THREAD(sdb)
 {
   oliHiPri(20);
-  printf("Shutter thread sdb starts...\n"); fflush(stdout);
+  //printf("Shutter thread sdb starts...\n"); fflush(stdout);
   // Loop
   while(1)
   {
@@ -605,7 +527,8 @@ OLI_THREAD(sdb)
       sdbUpChanged = 0;
       digitalWritePortB(motorDown[1], LOW);
       digitalWritePortB(motorUp[1], HIGH);
-      printf("Sdb up\n"); fflush(stdout);
+      printString(10, 75, 4, "Sdb up  ");
+      //printf("Sdb up\n"); fflush(stdout);
       int timout = 0;
       while((timout < SMALL) && ((digitalReadPortA(buttonUp[1]) == 1) || (sdbForceUp == 1)))
       {
@@ -622,7 +545,8 @@ OLI_THREAD(sdb)
       sdbDownChanged = 0;
       digitalWritePortB(motorUp[1], LOW);
       digitalWritePortB(motorDown[1], HIGH);
-      printf("Sdb down\n"); fflush(stdout);
+      printString(10, 75, 4, "Sdb down");
+      //printf("Sdb down\n"); fflush(stdout);
       int timout = 0;
       while((timout < SMALL) && ((digitalReadPortA(buttonDown[1]) == 1) || (sdbForceDown == 1)))
       {
@@ -640,7 +564,7 @@ OLI_THREAD(sdb)
 OLI_THREAD(erine)
 {
   oliHiPri(30);
-  printf("Shutter thread Erine starts...\n"); fflush(stdout);
+  //printf("Shutter thread Erine starts...\n"); fflush(stdout);
   // Loop
   while(1)
   {
@@ -650,7 +574,8 @@ OLI_THREAD(erine)
       erineUpChanged = 0;
       digitalWritePortB(motorDown[2], LOW);
       digitalWritePortB(motorUp[2], HIGH);
-      printf("Erine up\n"); fflush(stdout);
+      printString(11, 75, 4, "Erine up  ");
+      //printf("Erine up\n"); fflush(stdout);
       int timout = 0;
       while((timout < MEDIUM) && ((digitalReadPortA(buttonUp[2]) == 1) || (erineForceUp == 1)))
       {
@@ -667,7 +592,8 @@ OLI_THREAD(erine)
       erineDownChanged = 0;
       digitalWritePortB(motorUp[2], LOW);
       digitalWritePortB(motorDown[2], HIGH);
-      printf("Erine down\n"); fflush(stdout);
+      printString(11, 75, 4, "Erine down");
+      //printf("Erine down\n"); fflush(stdout);
       int timout = 0;
       while((timout < MEDIUM) && ((digitalReadPortA(buttonDown[2]) == 1) || (erineForceDown == 1)))
       {
@@ -685,7 +611,7 @@ OLI_THREAD(erine)
 OLI_THREAD(eva)
 {
   oliHiPri(40);
-  printf("Shutter thread Eva starts...\n"); fflush(stdout);
+  //printf("Shutter thread Eva starts...\n"); fflush(stdout);
   // Loop
   while(1)
   {
@@ -695,7 +621,8 @@ OLI_THREAD(eva)
       evaUpChanged = 0;
       digitalWritePortB(motorDown[3], LOW);
       digitalWritePortB(motorUp[3], HIGH);
-      printf("Eva up\n"); fflush(stdout);
+      printString(12, 75, 4, "Eva up  ");
+      //printf("Eva up\n"); fflush(stdout);
       int timout = 0;
       while((timout < MEDIUM) && ((digitalReadPortA(buttonUp[3]) == 1) || (evaForceUp == 1)))
       {
@@ -712,7 +639,8 @@ OLI_THREAD(eva)
       evaDownChanged = 0;
       digitalWritePortB(motorUp[3], LOW);
       digitalWritePortB(motorDown[3], HIGH);
-      printf("Eva down\n"); fflush(stdout);
+      printString(12, 75, 4, "Eva down");
+      //printf("Eva down\n"); fflush(stdout);
       int timout = 0;
       while((timout < MEDIUM) && ((digitalReadPortA(buttonDown[3]) == 1) || (evaForceDown == 1)))
       {
@@ -730,7 +658,7 @@ OLI_THREAD(eva)
 OLI_THREAD(laura)
 {
   oliHiPri(50);
-  printf("Shutter thread Laura starts...\n"); fflush(stdout);
+  //printf("Shutter thread Laura starts...\n"); fflush(stdout);
   // Loop
   while(1)
   {
@@ -740,7 +668,8 @@ OLI_THREAD(laura)
       lauraUpChanged = 0;
       digitalWritePortB(motorDown[4], LOW);
       digitalWritePortB(motorUp[4], HIGH);
-      printf("Laura up\n"); fflush(stdout);
+      printString(13, 75, 4, "Laura up  ");
+      //printf("Laura up\n"); fflush(stdout);
       int timout = 0;
       while((timout < MEDIUM) && ((digitalReadPortA(buttonUp[4]) == 1) || (lauraForceUp == 1)))
       {
@@ -757,7 +686,8 @@ OLI_THREAD(laura)
       lauraDownChanged = 0;
       digitalWritePortB(motorUp[4], LOW);
       digitalWritePortB(motorDown[4], HIGH);
-      printf("Laura down\n"); fflush(stdout);
+      printString(13, 75, 4, "Laura down");
+      //printf("Laura down\n"); fflush(stdout);
       int timout = 0;
       while((timout < MEDIUM) && ((digitalReadPortA(buttonDown[4]) == 1) || (lauraForceDown == 1)))
       {
@@ -775,7 +705,7 @@ OLI_THREAD(laura)
 OLI_THREAD(sam)
 {
   oliHiPri(60);
-  printf("Shutter thread Sam starts...\n"); fflush(stdout);
+  //printf("Shutter thread Sam starts...\n"); fflush(stdout);
   // Loop
   while(1)
   {
@@ -785,7 +715,8 @@ OLI_THREAD(sam)
       samUpChanged = 0;
       digitalWritePortB(motorDown[5], LOW);
       digitalWritePortB(motorUp[5], HIGH);
-      printf("Sam up\n"); fflush(stdout);
+      printString(14, 75, 4, "Sam up  ");
+      //printf("Sam up\n"); fflush(stdout);
       int timout = 0;
       while((timout < BIG) && ((digitalReadPortA(buttonUp[5]) == 1) || (samForceUp == 1)))
       {
@@ -802,7 +733,8 @@ OLI_THREAD(sam)
       samDownChanged = 0;
       digitalWritePortB(motorUp[5], LOW);
       digitalWritePortB(motorDown[5], HIGH);
-      printf("Sam down\n"); fflush(stdout);
+      printString(14, 75, 4, "Sam down");
+      //printf("Sam down\n"); fflush(stdout);
       int timout = 0;
       while((timout < BIG) && ((digitalReadPortA(buttonDown[5]) == 1) || (samForceDown == 1)))
       {
@@ -820,7 +752,7 @@ OLI_THREAD(sam)
 OLI_THREAD(cuisine)
 {
   oliHiPri(70);
-  printf("Shutter thread Cuisine starts...\n"); fflush(stdout);
+  //printf("Shutter thread Cuisine starts...\n"); fflush(stdout);
   // Loop
   while(1)
   {
@@ -830,7 +762,8 @@ OLI_THREAD(cuisine)
       cuisineUpChanged = 0;
       digitalWritePortB(motorDown[6], LOW);
       digitalWritePortB(motorUp[6], HIGH);
-      printf("Cuisine up\n"); fflush(stdout);
+      printString(15, 75, 4, "Cuisine up  ");
+      //printf("Cuisine up\n"); fflush(stdout);
       int timout = 0;
       while((timout < BIG) && ((digitalReadPortA(buttonUp[6]) == 1) || (cuisineForceUp == 1)))
       {
@@ -847,7 +780,8 @@ OLI_THREAD(cuisine)
       cuisineDownChanged = 0;
       digitalWritePortB(motorUp[6], LOW);
       digitalWritePortB(motorDown[6], HIGH);
-      printf("Cuisine down\n"); fflush(stdout);
+      printString(15, 75, 4, "Cuisine down");
+      //printf("Cuisine down\n"); fflush(stdout);
       int timout = 0;
       while((timout < BIG) && ((digitalReadPortA(buttonDown[6]) == 1) || (cuisineForceDown == 1)))
       {
@@ -865,7 +799,7 @@ OLI_THREAD(cuisine)
 OLI_THREAD(cellier)
 {
   oliHiPri(80);
-  printf("Shutter thread Cellier starts...\n"); fflush(stdout);
+  //printf("Shutter thread Cellier starts...\n"); fflush(stdout);
   // Loop
   while(1)
   {
@@ -875,7 +809,8 @@ OLI_THREAD(cellier)
       cellierUpChanged = 0;
       digitalWritePortB(motorDown[7], LOW);
       digitalWritePortB(motorUp[7], HIGH);
-      printf("Cellier up\n"); fflush(stdout);
+      printString(16, 75, 4, "Cellier up  ");
+      //printf("Cellier up\n"); fflush(stdout);
       int timout = 0;
       while((timout < SMALL) && ((digitalReadPortA(buttonUp[7]) == 1) || (cellierForceUp == 1)))
       {
@@ -892,7 +827,8 @@ OLI_THREAD(cellier)
       cellierDownChanged = 0;
       digitalWritePortB(motorUp[7], LOW);
       digitalWritePortB(motorDown[7], HIGH);
-      printf("Cellier down\n"); fflush(stdout);
+      printString(16, 75, 4, "Cellier down");
+      //printf("Cellier down\n"); fflush(stdout);
       int timout = 0;
       while((timout < SMALL) && ((digitalReadPortA(buttonDown[7]) == 1) || (cellierForceDown == 1)))
       {
@@ -910,7 +846,7 @@ OLI_THREAD(cellier)
 OLI_THREAD(gen)
 {
   oliHiPri(90);
-  printf("Shutter thread Gen starts...\n"); fflush(stdout);
+  //printf("Shutter thread Gen starts...\n"); fflush(stdout);
   // Loop
   while(1)
   {
@@ -934,7 +870,8 @@ OLI_THREAD(gen)
       digitalWritePortB(motorUp[5], HIGH);
       digitalWritePortB(motorUp[6], HIGH);
       digitalWritePortB(motorUp[7], HIGH);
-      printf("Gen up\n"); fflush(stdout);
+      printString(17, 75, 4, "Gen up  ");
+      //printf("Gen up\n"); fflush(stdout);
       int timout = 0;
       while((timout < BIG) && ((digitalReadPortGeneral(buttonCentralizedUp) == 1) || (genForceUp == 1)))
       {
@@ -972,7 +909,8 @@ OLI_THREAD(gen)
       digitalWritePortB(motorDown[5], HIGH);
       digitalWritePortB(motorDown[6], HIGH);
       digitalWritePortB(motorDown[7], HIGH);
-      printf("Gen down\n"); fflush(stdout);
+      printString(17, 75, 4, "Gen down");
+      //printf("Gen down\n"); fflush(stdout);
       int timout = 0;
       while((timout < BIG) && ((digitalReadPortGeneral(buttonCentralizedDown) == 1) || (genForceDown == 1)))
       {
@@ -1023,7 +961,10 @@ void clearDB()
   state = mysql_query(connection, "DELETE FROM inbox");
   if (state != 0)
   {
-    printf(mysql_error(connection));
+    attron(COLOR_PAIR(3));
+    mvprintw(3, 60, "%s", mysql_error(connection));
+    refresh();
+    //printf(mysql_error(connection));
     return;
   }
 }
@@ -1036,7 +977,10 @@ void smsProcessedDB(int index)
   state = mysql_query(connection, qry);
   if (state != 0)
   {
-    printf(mysql_error(connection));
+    attron(COLOR_PAIR(3));
+    mvprintw(3, 60, "%s", mysql_error(connection));
+    refresh();
+    //printf(mysql_error(connection));
     return;
   }
 }
@@ -1054,13 +998,19 @@ int readDB()
   state = mysql_query(connection, "SELECT TextDecoded, SenderNumber, ID FROM inbox WHERE Processed='false'");
   if (state != 0)
   {
-    printf(mysql_error(connection));
+    attron(COLOR_PAIR(3));
+    mvprintw(3, 60, "%s", mysql_error(connection));
+    refresh();
+    //printf(mysql_error(connection));
     return(0);
   }
   // must call mysql_store_result( ) before you can issue any other query calls
   result = mysql_store_result(connection);
   num = mysql_num_rows(result);
-  printf("Rows: %d\n", num);
+  attron(COLOR_PAIR(3));
+  mvprintw(19, 0, "Rows : %d", num);
+  refresh();
+  //printf("Rows: %d\n", num);
   // process each row in the result set
   while ((row = mysql_fetch_row(result)) != NULL)
   {
@@ -1074,7 +1024,10 @@ int readDB()
     {
       sendSMSDB(smsNumber, status);
     }
-    printf("Text: %s, Number: %s, index: %d\n", smsText, smsNumber, index);
+    attron(COLOR_PAIR(3));
+    mvprintw(20, 19, "Text: %s, Number: %s, index: %d", smsText, smsNumber, index);
+    refresh();
+    //printf("Text: %s, Number: %s, index: %d\n", smsText, smsNumber, index);
   }
   // free the result set
   mysql_free_result(result);
@@ -1091,7 +1044,10 @@ void sendSMSAlarm(char *message)
   // check for a connection error
   if (connection == NULL)
   {
-    printf(mysql_error(&mysql));
+    attron(COLOR_PAIR(3));
+    mvprintw(3, 60, "%s", mysql_error(&mysql));
+    refresh();
+    //printf(mysql_error(&mysql));
   }
   sendSMSDB(DENIS, message);
   // close the connection
@@ -1107,7 +1063,10 @@ void sendSMSDB(const char *number, char *message)
   state = mysql_query(connection, qry);
   if (state != 0)
   {
-    printf(mysql_error(connection));
+    attron(COLOR_PAIR(3));
+    mvprintw(3, 60, "%s", mysql_error(connection));
+    refresh();
+    //printf(mysql_error(connection));
     return;
   }
 }
@@ -1130,7 +1089,7 @@ char *GetCommand(const char *str, int index)
 {
   int start = GetTokenOpenBraces(strdup(str), index);
   int end = GetTokenCloseBraces(strdup(str), index);
-  printf("start=%d end=%d\n", start, end);
+  //printf("start=%d end=%d\n", start, end);
   if (start < end)
   {
     // Get what we need that in between braces
@@ -1236,14 +1195,20 @@ char *decodeSMS(const char *number, const char *text)
   {
     // Message is (A=x)(B=y)...
     int numCmd = numCommand(text);
-    printf("numCmd = %d\n", numCmd);
+    attron(COLOR_PAIR(3));
+    mvprintw(75, 19, "numCmd = %d", numCmd);
+    refresh();
+    //printf("numCmd = %d\n", numCmd);
     if (numCmd > 0)
     {
       // Get all commands
       for (i=1; i<numCmd+1; i++)
       {
         cmd = GetCommand(text, i);
-        printf("cmd=%s\n", cmd);
+        attron(COLOR_PAIR(3));
+        mvprintw(80, 19, "cmd = %s", cmd);
+        refresh();
+        //printf("cmd = %s\n", cmd);
         doCommand(cmd);
       }
     }
@@ -1258,7 +1223,10 @@ char *decodeSMS(const char *number, const char *text)
       else status = concat(2, status, "(B=0)");
 
       // Send back status
-      printf("status=%s\n", status);
+      attron(COLOR_PAIR(3));
+      mvprintw(20, 0, "status = %s\n", status);
+      refresh();
+      //printf("status=%s\n", status);
       return(status);
 
   	  free(status);
@@ -1315,8 +1283,8 @@ void doCommand(char *str)
         if (val == '1') {genForceDown = 0; genForceUp = 1; genUpChanged = 1;}
         break;
       case 'J' :
-        if (val == '0') {alarmActive = 0; digitalWrite(pinOliDisplay(7), LOW); printf("Alarm not active\n");}
-        if (val == '1') {alarmActive = 1; digitalWrite(pinOliDisplay(7), HIGH); printf("Alarm active\n");}
+        if (val == '0') {alarmActive = 0; digitalWrite(pinOliDisplay(7), LOW);  printString(22, 0, 4, "Alarm not active");}
+        if (val == '1') {alarmActive = 1; digitalWrite(pinOliDisplay(7), HIGH); printString(22, 0, 4, "Alarm active    ");}
         break;
     }
   }
@@ -1425,164 +1393,33 @@ void roundDisplay(int value)
   }
 }
 
-void printDate()
+void printString(int x, int y, int color, char *msg)
 {
-  time_t now;
-  time(&now); 
-  printf("%s", ctime(&now));
-  fflush(stdout);
+  attron(COLOR_PAIR(color));
+  mvprintw(x, y, "%s", msg);
+  refresh();
 }
 
-int dbOpen( MYSQL * pmysql)
+void maketime()
 {
-  MYSQL *mysql_connection;
-
-  // Open MySQL Database and read timestamp of the last record written
-  if(!mysql_init(pmysql))
-  {
-    log_syslog(stderr, "Cannot initialize MySQL");
-  }
-  else
-  {
-    // connect to database
-    mysql_connection = mysql_real_connect(pmysql, "192.168.1.50", "morind79", "DMO12lip6", "Domotic", 3306, NULL, 0);
-
-    if(mysql_connection == NULL)
-    {
-      printf("Cannot connect to database : %d: %s \n", mysql_errno(pmysql), mysql_error(pmysql));
-      log_syslog(stderr, "%d: %s \n", mysql_errno(pmysql), mysql_error(pmysql));
-      return(EXIT_FAILURE);
-    }
-  }
-
-  return (EXIT_SUCCESS);
+  // Get the current date/time
+  now = time (NULL);
+  now_tm = localtime (&now);
+  now_sec = now_tm->tm_sec;
+  now_min = now_tm->tm_min;
+  now_hour = now_tm->tm_hour;
+  now_day = now_tm->tm_mday;
+  now_wday = now_tm->tm_wday;
+  now_month = now_tm->tm_mon + 1;
+  now_year = now_tm->tm_year + 1900;
 }
 
-void dbClose( MYSQL * pmysql)
+void printDate(int x, int y, int color)
 {
-  mysql_close(pmysql);
-}
-
-void queryWaterMeter()
-{
-  static char mysql_field[ 512];
-  static char mysql_value[ 512];
-  static char mysql_job[1024];
-  char buf[10];
-  MYSQL mysql;
-
-  strcpy(mysql_field, "DATE");
-  strcpy(mysql_value, "NOW()");
-
-  strcat(mysql_field, ",LITER");
-
-  sprintf(buf, "%d", water);
-
-  strcat(mysql_value, ",'");
-  strcat(mysql_value, buf);
-  strcat(mysql_value, "'");
-
-  sprintf(mysql_job, "INSERT INTO DbiWaterMeter\n  (%s)\nVALUES\n  (%s);\n", mysql_field, mysql_value);
-
-  fprintf(stdout, "%s", mysql_job);
-
-  if ( dbOpen(&mysql) != EXIT_SUCCESS )
-    log_syslog(stderr, "%d: %s \n", mysql_errno(&mysql), mysql_error(&mysql));
-  else
-  {
-    // execute SQL query : INSERT INTO `DbiWaterMeter`(`id`, `DATE`, `LITER`) VALUES ([value-1],[value-2],[value-3])
-    if (mysql_query(&mysql, mysql_job))
-    {
-      log_syslog(stderr, "%d: %s \n", mysql_errno(&mysql), mysql_error(&mysql));
-    }
-
-    db_close(&mysql);
-  }
-
-  water = 0;
-  // close the connection
-  dbClose(&mysql);
-}
-
-void queryEnergyMeter()
-{
-  processEnergyMeter(1);  // Maison
-  processEnergyMeter(2);  // Chauffe Eau
-  processEnergyMeter(3);  // Photovoltaique
-  processEnergyMeter(8);  // Auto-conso
-  processEnergyMeter(5);  // Non-conso
-  processEnergyMeter(6);  // PAC
-}
-
-void processEnergyMeter(int channel)
-{
-  if (channel == 1) // Maison ADCO=700622010525
-  {
-    mcp23008DigitalWrite(fdMCPEnergy, 1, LOW); // Dir2 = 0 (S2)
-    mcp23008DigitalWrite(fdMCPEnergy, 2, LOW); // Dir3 = 0 (S1)
-    mcp23008DigitalWrite(fdMCPEnergy, 3, LOW); // Dir4 = 0 (S0)
-    log_syslog(stderr, "Channel 1 >>>>>  MAISON  <<<<<\n");
-  }
-  else if (channel == 2) // Chauffe-eau ADCO=050622013932
-  {
-    mcp23008DigitalWrite(fdMCPEnergy, 1, LOW);
-    mcp23008DigitalWrite(fdMCPEnergy, 2, LOW);
-    mcp23008DigitalWrite(fdMCPEnergy, 3, HIGH);
-    log_syslog(stderr, "Channel 2 >>>>>  Chauffe-eau  <<<<<<\n");
-  }
-  else if (channel == 3) // Photovoltaique ADCO=021028809892
-  {
-    mcp23008DigitalWrite(fdMCPEnergy, 1, LOW);
-    mcp23008DigitalWrite(fdMCPEnergy, 2, HIGH);
-    mcp23008DigitalWrite(fdMCPEnergy, 3, LOW);
-    log_syslog(stderr, "Channel 3 >>>>>  Photovoltaique  <<<<<\n");
-  }
-  else if (channel == 4) // Does not work at all !!!
-  {
-    mcp23008DigitalWrite(fdMCPEnergy, 1, LOW);
-    mcp23008DigitalWrite(fdMCPEnergy, 2, HIGH);
-    mcp23008DigitalWrite(fdMCPEnergy, 3, HIGH);
-    log_syslog(stderr, "Channel 4\n");
-  }
-  else if (channel == 5) // Non-conso ADCO=021028809922
-  {
-    mcp23008DigitalWrite(fdMCPEnergy, 1, HIGH);
-    mcp23008DigitalWrite(fdMCPEnergy, 2, LOW);
-    mcp23008DigitalWrite(fdMCPEnergy, 3, LOW);
-    log_syslog(stderr, "Channel 5 >>>>>  Non-conso  <<<<<\n");
-  }
-  else if (channel == 6) // PAC ADCO=050522019453
-  {
-    mcp23008DigitalWrite(fdMCPEnergy, 1, HIGH);
-    mcp23008DigitalWrite(fdMCPEnergy, 2, LOW);
-    mcp23008DigitalWrite(fdMCPEnergy, 3, HIGH);
-    log_syslog(stderr, "Channel 6 >>>>>  PAC  <<<<<\n");
-  }
-  else if (channel == 7)
-  {
-    mcp23008DigitalWrite(fdMCPEnergy, 1, HIGH);
-    mcp23008DigitalWrite(fdMCPEnergy, 2, HIGH);
-    mcp23008DigitalWrite(fdMCPEnergy, 3, LOW);
-    log_syslog(stderr, "Channel 7\n");
-  }
-  else if (channel == 8) // Auto-conso ADCO=039801178663
-  {
-    mcp23008DigitalWrite(fdMCPEnergy, 1, HIGH);
-    mcp23008DigitalWrite(fdMCPEnergy, 2, HIGH);
-    mcp23008DigitalWrite(fdMCPEnergy, 3, HIGH);
-    log_syslog(stderr, "Channel 8 >>>>>  Auto-consommation  <<<<<\n");
-  }
-  // Enable 74LS151
-  mcp23008DigitalWrite(fdMCPEnergy, 0, LOW);
-  log_syslog(stderr, "Channel enable\n");
-  delay(1000);
-  // Read Energy meter
-  readEnergyMeter();
-  delay(1000);
-  // Disable 74LS151
-  mcp23008DigitalWrite(fdMCPEnergy, 0, HIGH);
-  delay(1000);
-  log_syslog(stderr, "Channel disable\n");
+  maketime();
+  attron(COLOR_PAIR(color));
+  mvprintw(x, y, "%02d:%02d:%02d", now_hour, now_min, now_sec);
+  refresh();
 }
 
 int main(void)
@@ -1601,8 +1438,6 @@ int main(void)
     printf(mysql_error(&mysql));
     return 1;
   }
-  printf("\n");
-  printDate();
   // Start with a clean database
   clearDB();
   // close the connection
@@ -1612,35 +1447,16 @@ int main(void)
   oliExtSetup();
   // I2C communication
   fd = wiringOliI2CSetup(0, 0x02);
-  if (fd == -1)
-  {
-    printf("Can't setup the Arduino I2C slave device\n");
-  }
-
-  // MCP23008 energy meter
-  fdMCPEnergy = mcp23008Init(0x24);
-  if (fdMCPEnergy == -1)
-  {
-    printf("Can't setup the energy board I2C device\n");
-  }
-  mcp23008PinMode(fdMCPEnergy, 0, OUTPUT);
-  mcp23008PinMode(fdMCPEnergy, 1, OUTPUT);
-  mcp23008PinMode(fdMCPEnergy, 2, OUTPUT);
-  mcp23008PinMode(fdMCPEnergy, 3, OUTPUT);
-  mcp23008PinMode(fdMCPEnergy, 4, OUTPUT);
-  mcp23008PinMode(fdMCPEnergy, 5, OUTPUT);
-  mcp23008PinMode(fdMCPEnergy, 6, OUTPUT);
-  mcp23008PinMode(fdMCPEnergy, 7, OUTPUT);
-
-  mcp23008DigitalWrite(fdMCPEnergy, 0, HIGH);  // Disable 74LS151
-  mcp23008DigitalWrite(fdMCPEnergy, 1, LOW);
-  mcp23008DigitalWrite(fdMCPEnergy, 2, LOW);
-  mcp23008DigitalWrite(fdMCPEnergy, 3, LOW);
-  mcp23008DigitalWrite(fdMCPEnergy, 4, HIGH);
-  mcp23008DigitalWrite(fdMCPEnergy, 5, HIGH);
-  mcp23008DigitalWrite(fdMCPEnergy, 6, HIGH);
-  mcp23008DigitalWrite(fdMCPEnergy, 7, HIGH);
-
+  // MCP23008
+  mcp23008Init(0x20);
+  mcp23008PinMode(0, OUTPUT);
+  mcp23008PinMode(1, OUTPUT);
+  mcp23008PinMode(2, OUTPUT);
+  mcp23008PinMode(3, OUTPUT);
+  mcp23008PinMode(4, OUTPUT);
+  mcp23008PinMode(5, OUTPUT);
+  mcp23008PinMode(6, OUTPUT);
+  mcp23008PinMode(7, OUTPUT);
   // Port A as input
   for (i=0; i<16; i++)
   {
@@ -1676,50 +1492,65 @@ int main(void)
   prevAlarm1 = millis();
   prevAlarm2 = millis();
   // Start
-  printf("Start loop\n");
+  //printf("Start loop\n");  
   // Read initial state
   setup();
-
+  
+  // Curses
+  initscr();
+  start_color(); 
+  noecho();
+  curs_set(FALSE);
+  
+  init_pair(1, COLOR_RED, COLOR_BLACK);
+  init_pair(2, COLOR_GREEN, COLOR_BLACK);
+  init_pair(3, COLOR_CYAN, COLOR_BLACK);
+  init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
+  init_pair(5, COLOR_YELLOW, COLOR_BLACK);
+  
+  attron(COLOR_PAIR(1));
+  mvprintw(0, 0, "Shutter V0.1");
+  
   // Start thread for RI pin
   int xP = oliThreadCreate(ri);
-  if (xP != 0) printf ("RI didn't start\n");
+  if (xP != 0) mvprintw(3, 0, "RI didn't start");
 
   int x0 = oliThreadCreate(alarm);
-  if (x0 != 0) printf("Alarm didn't start\n");
-
+  if (x0 != 0) mvprintw(3, 0, "Alarm didn't start");
+  
   int x1 = oliThreadCreate(alarmOff);
-  if (x1 != 0) printf("AlarmOff didn't start\n");
+  if (x1 != 0) mvprintw(3, 0, "AlarmOff didn't start");
 
   int x2 = oliThreadCreate(buttons);
-  if (x2 != 0) printf ("Buttons didn't start\n");
+  if (x2 != 0) mvprintw(3, 0, "Buttons didn't start");
 
   int x3 = oliThreadCreate(salon);
-  if (x3 != 0) printf ("Salon didn't start\n");
+  if (x3 != 0) mvprintw(3, 0, "Salon didn't start");
 
   int x4 = oliThreadCreate(sdb);
-  if (x4 != 0) printf ("Sdb didn't start\n");
+  if (x4 != 0) mvprintw(3, 0, "Sdb didn't start");
 
   int x5 = oliThreadCreate(erine);
-  if (x5 != 0) printf ("Erine didn't start\n");
+  if (x5 != 0) mvprintw(3, 0, "Erine didn't start");
 
   int x6 = oliThreadCreate(eva);
-  if (x6 != 0) printf ("Eva didn't start\n");
+  if (x6 != 0) mvprintw(3, 0, "Eva didn't start");
 
   int x7 = oliThreadCreate(laura);
-  if (x7 != 0) printf ("Laura didn't start\n");
+  if (x7 != 0) mvprintw(3, 0, "Laura didn't start");
 
   int x8 = oliThreadCreate(sam);
-  if (x8 != 0) printf ("Sam didn't start\n");
+  if (x8 != 0) mvprintw(3, 0, "Sam didn't start");
 
   int x9 = oliThreadCreate(cuisine);
-  if (x9 != 0) printf ("Cuisine didn't start\n");
+  if (x9 != 0) mvprintw(3, 0, "Cuisine didn't start");
 
   int xA = oliThreadCreate(cellier);
-  if (xA != 0) printf ("Cellier didn't start\n");
-
+  if (xA != 0) mvprintw(3, 0, "Cellier didn't start");
+  
   int xB = oliThreadCreate(gen);
-  if (xB != 0) printf ("Gen didn't start\n");
-
+  if (xB != 0) mvprintw(3, 0, "Gen didn't start");
+  refresh();
   // Infinite loop
   for(;;)
   {
@@ -1730,35 +1561,27 @@ int main(void)
       wiringOliI2CWriteReg8(fd, 0x00, 0x73);
       break;
     }
-    else if (ch=='a') {salonForceUp = 0; salonForceDown = 1; salonDownChanged = 1;}
-    else if (ch=='b') {salonForceDown = 0; salonForceUp = 1; salonUpChanged = 1;}
-    else if (ch=='c') {sdbForceUp = 0; sdbForceDown = 1; sdbDownChanged = 1;}
-    else if (ch=='d') {sdbForceDown = 0; sdbForceUp = 1; sdbUpChanged = 1;}
-    else if (ch=='e') {erineForceUp = 0; erineForceDown = 1; erineDownChanged = 1;}
-    else if (ch=='f') {erineForceDown = 0; erineForceUp = 1; erineUpChanged = 1;}
-    else if (ch=='g') {evaForceUp = 0; evaForceDown = 1; evaDownChanged = 1;}
-    else if (ch=='h') {evaForceDown = 0; evaForceUp = 1; evaUpChanged = 1;}
-    else if (ch=='i') {lauraForceUp = 0; lauraForceDown = 1; lauraDownChanged = 1;}
-    else if (ch=='j') {lauraForceDown = 0; lauraForceUp = 1; lauraUpChanged = 1;}
-    else if (ch=='k') {samForceUp = 0; samForceDown = 1; samDownChanged = 1;}
-    else if (ch=='l') {samForceDown = 0; samForceUp = 1; samUpChanged = 1;}
-    else if (ch=='m') {cuisineForceUp = 0; cuisineForceDown = 1; cuisineDownChanged = 1;}
-    else if (ch=='n') {cuisineForceDown = 0; cuisineForceUp = 1; cuisineUpChanged = 1;}
-    else if (ch=='o') {cellierForceUp = 0; cellierForceDown = 1; cellierDownChanged = 1;}
-    else if (ch=='p') {cellierForceDown = 0; cellierForceUp = 1; cellierUpChanged = 1;}
-    else if (ch=='q') {genForceUp = 0; genForceDown = 1; genDownChanged = 1;}
-    else if (ch=='r') {genForceDown = 0; genForceUp = 1; genUpChanged = 1;}
-    else if (ch=='t') {queryEnergyMeter();}
-    else if (ch=='w') {queryWaterMeter();}
-    else if (ch=='1') {processEnergyMeter(1);}
-    else if (ch=='2') {processEnergyMeter(2);}
-    else if (ch=='3') {processEnergyMeter(3);}
-    else if (ch=='4') {processEnergyMeter(4);}
-    else if (ch=='5') {processEnergyMeter(5);}
-    else if (ch=='6') {processEnergyMeter(6);}
-    else if (ch=='7') {processEnergyMeter(7);}
-    else if (ch=='8') {processEnergyMeter(8);}
+    else if(ch=='a') {salonForceUp = 0; salonForceDown = 1; salonDownChanged = 1;}
+    else if(ch=='b') {salonForceDown = 0; salonForceUp = 1; salonUpChanged = 1;}
+    else if(ch=='c') {sdbForceUp = 0; sdbForceDown = 1; sdbDownChanged = 1;}
+    else if(ch=='d') {sdbForceDown = 0; sdbForceUp = 1; sdbUpChanged = 1;}
+    else if(ch=='e') {erineForceUp = 0; erineForceDown = 1; erineDownChanged = 1;}
+    else if(ch=='f') {erineForceDown = 0; erineForceUp = 1; erineUpChanged = 1;}
+    else if(ch=='g') {evaForceUp = 0; evaForceDown = 1; evaDownChanged = 1;}
+    else if(ch=='h') {evaForceDown = 0; evaForceUp = 1; evaUpChanged = 1;}
+    else if(ch=='i') {lauraForceUp = 0; lauraForceDown = 1; lauraDownChanged = 1;}
+    else if(ch=='j') {lauraForceDown = 0; lauraForceUp = 1; lauraUpChanged = 1;}
+    else if(ch=='k') {samForceUp = 0; samForceDown = 1; samDownChanged = 1;}
+    else if(ch=='l') {samForceDown = 0; samForceUp = 1; samUpChanged = 1;}
+    else if(ch=='m') {cuisineForceUp = 0; cuisineForceDown = 1; cuisineDownChanged = 1;}
+    else if(ch=='n') {cuisineForceDown = 0; cuisineForceUp = 1; cuisineUpChanged = 1;}
+    else if(ch=='o') {cellierForceUp = 0; cellierForceDown = 1; cellierDownChanged = 1;}
+    else if(ch=='p') {cellierForceDown = 0; cellierForceUp = 1; cellierUpChanged = 1;}
+    else if(ch=='q') {genForceUp = 0; genForceDown = 1; genDownChanged = 1;}
+    else if(ch=='r') {genForceDown = 0; genForceUp = 1; genUpChanged = 1;}
+
     delay(100);
   }
+  endwin();
   return(0);
 }

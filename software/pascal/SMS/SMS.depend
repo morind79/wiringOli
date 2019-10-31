@@ -1,0 +1,14 @@
+# depslib dependency file v1.0
+1426859918 source:/home/denis/pascal/SMS/main.cpp
+	<wiringOli.h>
+	<wiringOliI2C.h>
+	<oliExt.h>
+	<i2cLcd.h>
+	<assert.h>
+	<stdio.h>
+	<stdlib.h>
+	<mysql.h>
+	<string.h>
+	<stdarg.h>
+	<time.h>
+
